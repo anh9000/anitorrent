@@ -115,9 +115,13 @@ function toResult(item, accuracy) {
 }
 function rank(results, resolution) {
   return results.sort((a, b) => {
-    const am = matchesResolution(a.title, resolution) ? 1 : 0;
-    const bm = matchesResolution(b.title, resolution) ? 1 : 0;
-    if (am !== bm) return bm - am;
+    if (resolution) {
+      const am = matchesResolution(a.title, resolution) ? 1 : 0;
+      const bm = matchesResolution(b.title, resolution) ? 1 : 0;
+      if (am !== bm) return bm - am;
+    }
+    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0);
+    if (dt !== 0) return dt;
     return b.seeders - a.seeders;
   });
 }
