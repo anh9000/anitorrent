@@ -50,4 +50,4 @@ Output: `dist/nyaa.js`. CI rebuilds on every push that touches `src/`, `package.
 
 ## License
 
-MIT. See [LICENSE](./LICENSE).
+GPL-3.0. See [LICENSE](./LICENSE).
