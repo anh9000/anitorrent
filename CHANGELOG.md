@@ -4,6 +4,12 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.5.2] - 2026-05-18
+
+### Changed
+
+- **subsplease 1.0.2** and **yameii 1.0.4**. Manifest `languages` field changed from `["US"]` to `["ALL"]` on both sources. They were the only two showing the USA flag while the other four showed the globe icon. Per the same principle behind the `media: "both"` rule (badges are purely informational and should never gate user choice), all six sources now declare `languages: ["ALL"]` consistently.
+
 ## [1.5.1] - 2026-05-18
 
 ### Changed
@@ -129,6 +135,7 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.5.2]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.2
 [1.5.1]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.1
 [1.5.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.0
 [1.4.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.4.0
