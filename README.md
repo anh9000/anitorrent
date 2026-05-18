@@ -42,10 +42,16 @@ Built and verified against this Hayase build:
 | Platform | Windows |
 | All six sources online | ✅ verified `2026-05-18` |
 
-Screenshot of the extensions page in Hayase showing all six rows green and current:
+The extensions page in Hayase, all six sources green and current:
 
 <p align="center">
-  <img src="./.github/assets/installed-extensions.png" alt="anitorrent extensions live in Hayase" width="720">
+  <img src="./.github/assets/installed-extensions.png" alt="anitorrent extensions installed in Hayase, all six rows online" width="720">
+</p>
+
+What a search looks like (Nippon Sangoku, episode 7), pulling results from multiple sources in one panel:
+
+<p align="center">
+  <img src="./.github/assets/search-results.png" alt="anitorrent search results modal in Hayase showing torrent rows from multiple sources" width="720">
 </p>
 
 ## Install in Hayase
