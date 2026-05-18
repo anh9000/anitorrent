@@ -42,9 +42,9 @@ function buildSvg (fillColor) {
 `
 }
 
-await mkdir('assets', { recursive: true })
-await writeFile('assets/title-light.svg', buildSvg('#0a0a0a'))
-await writeFile('assets/title-dark.svg', buildSvg('#f6f8fa'))
+await mkdir('.github/assets', { recursive: true })
+await writeFile('.github/assets/title-light.svg', buildSvg('#0a0a0a'))
+await writeFile('.github/assets/title-dark.svg', buildSvg('#f6f8fa'))
 
-console.log('Wrote assets/title-light.svg and assets/title-dark.svg')
+console.log('Wrote .github/assets/title-light.svg and .github/assets/title-dark.svg')
 console.log('Inner size:', innerW + 'x' + innerH, '| Padded:', width + 'x' + height)

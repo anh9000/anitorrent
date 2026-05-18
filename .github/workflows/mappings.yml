@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: '20'
 
-      - run: node scripts/build-mappings.js
+      - run: node .github/scripts/build-mappings.js
 
       - name: Commit updated mapping
         run: |

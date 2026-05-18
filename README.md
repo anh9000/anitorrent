@@ -1,11 +1,13 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/title-dark.svg">
-    <img src="./assets/title-light.svg" alt="anitorrent" width="420">
+    <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/title-dark.svg">
+    <img src="./.github/assets/title-light.svg" alt="anitorrent" width="420">
   </picture>
 </p>
 
-Anime torrent search extensions for [Hayase](https://hayase.watch) and [Shiru](https://github.com/RockinChaos/Shiru). One install URL, six toggleable sources.
+Anime torrent extension built for [Hayase](https://hayase.watch). Six toggleable sources, auto-updating in the background, no manual maintenance.
+
+> **Shiru note:** a [Shiru](https://github.com/RockinChaos/Shiru) manifest is also published, but this has **not been tested in an actual Shiru install**. The code was designed against the lowest-common-denominator API both apps accept, so it should work. If you try it in Shiru and hit a problem, please [open an issue](https://github.com/anh9000/anitorrent/issues) with the details.
 
 ## Sources
 
@@ -29,9 +31,7 @@ These are personal picks that ship enabled by default but are entirely toggleabl
 
 All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub badges regardless. The badge is purely informational, it does not filter results.
 
-## Install
-
-### Hayase (tested, primary target)
+## Install in Hayase
 
 Settings → Extensions → Repositories → paste → Import Extensions:
 
@@ -39,21 +39,21 @@ Settings → Extensions → Repositories → paste → Import Extensions:
 https://raw.githubusercontent.com/anh9000/anitorrent/main/hayase/index.json
 ```
 
-### Shiru (designed for, not yet tested)
+That's it. One-time action. Hayase auto-polls the manifest on every launch, so any future release flows in automatically without re-importing.
 
-The code was written against the lowest-common-denominator API that both Hayase and Shiru accept, and a dedicated Shiru manifest is published, but **this has not been verified in an actual Shiru install**. Results may vary. If you import it in Shiru and hit a problem, please open an issue on the repo with whatever error / behavior you see.
-
-Settings → Extensions → paste:
+### Shiru install URL (untested, try at your own risk)
 
 ```
 https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json
 ```
 
+Settings → Extensions → paste. See the disclaimer at the top of this README.
+
 ## ID mapping
 
 `data/anilist-to-anidb.json` is a compact 170 KB map (~13,000 pairs) extracted from the [manami-project anime-offline-database](https://github.com/manami-project/anime-offline-database). The AnimeTosho extension fetches this file on first call (cached in memory for the session) to convert AniList IDs to AniDB IDs when Hayase doesn't provide them, enabling high-accuracy lookups via AnimeTosho's `?aid=<id>` endpoint.
 
-The mapping is regenerated weekly by `.github/workflows/mappings.yml` running `scripts/build-mappings.js`. Manami publishes "Delta Update" commits multiple times per week and tagged weekly releases, so the chain stays fresh automatically with no manual action.
+The mapping is regenerated weekly by `.github/workflows/mappings.yml` running `.github/scripts/build-mappings.js`. Manami publishes "Delta Update" commits multiple times per week and tagged weekly releases, so the chain stays fresh automatically with no manual action.
 
 ## Develop
 
