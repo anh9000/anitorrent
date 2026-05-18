@@ -2,13 +2,15 @@
 
 Anime torrent search extensions for [Hayase](https://hayase.watch) and [Shiru](https://github.com/RockinChaos/Shiru). One install URL, four toggleable sources:
 
-| Source | Accuracy | Media | Best for |
-|---|---|---|---|
-| Nyaa | medium | both | Raw firehose, full coverage |
-| AnimeTosho | high | both | Anidb-mapped shows, batch packs |
-| Seadex | high | both | Community-curated best releases |
-| SubsPlease | high | sub | Currently-airing weekly fansubs |
-| Yameii (Dubs) | high | dub | English dubs from the Yameii uploader |
+| Source | Accuracy | Best for |
+|---|---|---|
+| Nyaa | medium | Raw firehose, full coverage |
+| AnimeTosho | high | Anidb-mapped shows, batch packs |
+| Seadex | high | Community-curated best releases |
+| SubsPlease | high | Currently-airing weekly fansubs (mostly subbed) |
+| Yameii | high | English-dub uploads from the Yameii uploader |
+
+All sources declare `media: "both"` in the manifest so Hayase shows both Sub and Dub badges. The badge is purely informational, it doesn't filter results.
 
 ## Install
 

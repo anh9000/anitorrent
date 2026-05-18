@@ -4,6 +4,12 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.3.1] - 2026-05-18
+
+### Changed
+
+- **subsplease 1.0.1** and **yameii 1.0.1**. Manifest `media` field changed to `both` on both sources. The field is purely informational (the wiki confirms it doesn't filter results) and Anh's standing rule is that every source declares `both` to give users flexibility. All five sources now consistently report `media: both`.
+
 ## [1.3.0] - 2026-05-18
 
 ### Added
@@ -87,6 +93,7 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.3.1]: https://github.com/anh9000/anitorrent/releases/tag/v1.3.1
 [1.3.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.3.0
 [1.2.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.2.0
 [1.1.4]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.4
