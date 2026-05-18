@@ -4,7 +4,7 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
-## [1.5.4] - 2026-05-18 - First stable release
+## [1.5.4] - 2026-05-18 (stable)
 
 Marks the first stable, audited release. Full code audit done across all six sources, manifests, build pipeline, mapping pipeline, and CI workflows. One bug found and fixed (below). Comprehensive smoke test run across six shows × six sources, zero garbage results, zero unexpected failures.
 
