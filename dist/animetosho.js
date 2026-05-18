@@ -53,13 +53,21 @@ function buildTitleTokens(titles) {
   }
   return tokens;
 }
-function resultMatchesShow(title, tokens) {
+function resultMatchesShow(title, tokens, minHits = 1) {
   if (!tokens.size) return true;
   const lower = title.toLowerCase();
+  let hits = 0;
   for (const tok of tokens) {
-    if (lower.includes(tok)) return true;
+    if (lower.includes(tok)) {
+      hits++;
+      if (hits >= minHits) return true;
+    }
   }
   return false;
+}
+function validId(v) {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0;
 }
 function titleHasEpisode(title, ep) {
   if (ep == null) return true;
@@ -170,19 +178,19 @@ async function search(query, mode) {
   const resolution = query.resolution || "";
   const showTokens = buildTitleTokens(query.titles || []);
   let results = [];
-  if (mode === "single" && query.anidbEid) {
+  if (mode === "single" && validId(query.anidbEid)) {
     try {
       results = await fetchByEid(query.anidbEid);
     } catch (_) {
       results = [];
     }
-  } else if (mode === "batch" && query.anidbAid) {
+  } else if (mode === "batch" && validId(query.anidbAid)) {
     try {
       results = await fetchByShow(query.anidbAid, "batches");
     } catch (_) {
       results = [];
     }
-  } else if (mode === "movie" && query.anidbAid) {
+  } else if (mode === "movie" && validId(query.anidbAid)) {
     try {
       results = await fetchByShow(query.anidbAid, "movies");
     } catch (_) {
@@ -192,7 +200,8 @@ async function search(query, mode) {
   if (!results.length && (query.titles || []).length) {
     results = await fetchByText(query.titles);
   }
-  results = dedupe(results).filter((r) => !hitsExclusion(r.title, exclusions)).filter((r) => resultMatchesShow(r.title, showTokens));
+  const minHits = showTokens.size >= 3 ? 2 : 1;
+  results = dedupe(results).filter((r) => !hitsExclusion(r.title, exclusions)).filter((r) => resultMatchesShow(r.title, showTokens, minHits));
   if (mode === "single" && query.episode != null) {
     results = results.filter((r) => titleHasEpisode(r.title, query.episode));
   }
