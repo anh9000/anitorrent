@@ -70,5 +70,23 @@
     "icon": "https://subsplease.org/favicon.ico",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/hayase/index.json",
     "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/subsplease.js"
+  },
+  {
+    "manifestVersion": 2,
+    "name": "Yameii (Dubs)",
+    "id": "anitorrent.yameii",
+    "version": "1.0.0",
+    "type": "torrent",
+    "accuracy": "high",
+    "updatePeers": false,
+    "ratio": 0,
+    "media": "dub",
+    "languages": ["US"],
+    "nsfw": false,
+    "url": "aHR0cHM6Ly9ueWFhLnNp",
+    "description": "English dub uploads from Yameii on nyaa.si. Single-uploader source, highly consistent quality. IRC: #Yameii@irc.rizon.net.",
+    "icon": "https://nyaa.si/static/favicon.png",
+    "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/hayase/index.json",
+    "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/yameii.js"
   }
 ]

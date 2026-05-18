@@ -54,5 +54,19 @@
     "description": "Direct API for currently-airing weekly fansubs from SubsPlease.",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
     "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/subsplease.js"
+  },
+  {
+    "name": "Yameii (Dubs)",
+    "id": "anitorrent.yameii",
+    "version": "1.0.0",
+    "type": "torrent",
+    "accuracy": "high",
+    "ratio": 0,
+    "media": "dub",
+    "languages": ["US"],
+    "icon": "https://nyaa.si/static/favicon.png",
+    "description": "English dub uploads from Yameii on nyaa.si.",
+    "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
+    "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/yameii.js"
   }
 ]
