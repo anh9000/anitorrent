@@ -17,8 +17,69 @@ var BATCH_PATTERNS = [
   /\bs\d{1,2}\b(?!\s*e\d)/i,
   /\b\d{1,3}\s*[-~]\s*\d{1,3}\b/
 ];
+var STOPWORDS = /* @__PURE__ */ new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "this",
+  "that",
+  "her",
+  "his",
+  "are",
+  "was",
+  "were",
+  "has",
+  "have",
+  "had",
+  "who",
+  "what",
+  "when",
+  "where",
+  "why",
+  "how",
+  "all",
+  "any",
+  "one",
+  "two",
+  "season",
+  "episode",
+  "part",
+  "arc",
+  "movie",
+  "film",
+  "ova",
+  "special"
+]);
 function escapeQuery(str) {
   return str.replace(/[^\w\s\-.]/g, " ").replace(/\s+/g, " ").trim();
+}
+function significantTokens(title) {
+  return escapeQuery(title).toLowerCase().split(/\s+/).filter((t) => t.length >= 3 && !STOPWORDS.has(t));
+}
+function buildTitleTokens(titles) {
+  const tokens = /* @__PURE__ */ new Set();
+  for (const t of titles) {
+    for (const tok of significantTokens(t)) tokens.add(tok);
+  }
+  return tokens;
+}
+function resultMatchesShow(resultTitle, tokens) {
+  if (!tokens.size) return true;
+  const lower = resultTitle.toLowerCase();
+  for (const tok of tokens) {
+    if (lower.includes(tok)) return true;
+  }
+  return false;
+}
+function trimTitleForQuery(title) {
+  const colon = title.indexOf(":");
+  const base = colon > 0 ? title.slice(0, colon) : title;
+  return significantTokens(base).slice(0, 4).join(" ") || escapeQuery(title);
+}
+function titlesByLengthAsc(titles) {
+  return [...titles].sort((a, b) => a.length - b.length);
 }
 function pad(n) {
   const s = String(n);
@@ -132,22 +193,22 @@ function rankResults(results, resolution) {
   });
 }
 function buildQuery(title, opts) {
-  let q = escapeQuery(title);
+  let q = trimTitleForQuery(title);
   if (opts.episode != null && !opts.batch && !opts.movie) {
     q += " " + pad(opts.episode);
   }
-  if (opts.resolution) q += " " + opts.resolution + "p";
   return q;
 }
 async function runSearch(query, opts) {
   if (!query.titles || !query.titles.length) return [];
   const exclusions = query.exclusions || [];
   const resolution = query.resolution || "";
+  const showTokens = buildTitleTokens(query.titles);
   const seen = /* @__PURE__ */ new Set();
   const results = [];
-  const titles = query.titles.slice(0, 3);
+  const titles = titlesByLengthAsc(query.titles).slice(0, 3);
   for (const title of titles) {
-    const q = buildQuery(title, { ...opts, resolution });
+    const q = buildQuery(title, opts);
     let items;
     try {
       items = await rssSearch(q);
@@ -159,6 +220,7 @@ async function runSearch(query, opts) {
       const r = itemToResult(raw, { exclusions, batch: opts.batch });
       if (!r) continue;
       if (seen.has(r.hash)) continue;
+      if (!resultMatchesShow(r.title, showTokens)) continue;
       seen.add(r.hash);
       results.push(r);
     }
