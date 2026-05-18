@@ -55,6 +55,18 @@ function validId (v) {
   return Number.isInteger(n) && n > 0
 }
 
+const BATCH_PATTERNS = [
+  /\bbatch\b/i,
+  /\bcomplete\b/i,
+  /\bseason\s*\d+\b/i,
+  /\bs\d{1,2}\b(?!\s*e\d)/i,
+  /\b\d{1,3}\s*[-~]\s*\d{1,3}\b/
+]
+
+function looksLikeBatch (title) {
+  return BATCH_PATTERNS.some(re => re.test(title))
+}
+
 function titleHasEpisode (title, ep) {
   if (ep == null) return true
   const n = String(ep).replace(/^0+/, '') || '0'
@@ -201,6 +213,12 @@ async function search (query, mode) {
 
   if (mode === 'single' && query.episode != null) {
     results = results.filter(r => titleHasEpisode(r.title, query.episode))
+  }
+
+  if (mode === 'batch') {
+    results = results
+      .filter(r => looksLikeBatch(r.title))
+      .map(r => ({ ...r, type: 'batch' }))
   }
 
   return rank(results, resolution).slice(0, 30)

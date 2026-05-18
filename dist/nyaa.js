@@ -251,10 +251,7 @@ var nyaa_default = new class Nyaa {
   }
   async batch(query) {
     const results = await runSearch(query, { batch: true });
-    return results.map((r) => ({
-      ...r,
-      type: looksLikeBatch(r.title) ? "batch" : r.type
-    }));
+    return results.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch" }));
   }
   async movie(query) {
     return runSearch(query, { movie: true });
