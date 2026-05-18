@@ -31,6 +31,23 @@ These are personal picks that ship enabled by default but are entirely toggleabl
 
 All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub badges regardless. The badge is purely informational, it does not filter results.
 
+## Tested on
+
+Built and verified against this Hayase build:
+
+| Component | Version |
+|---|---|
+| Hayase Interface | `v6.4.366` |
+| Hayase Native | `6.4.69` |
+| Platform | Windows |
+| All six sources online | ✅ verified `2026-05-18` |
+
+Screenshot of the extensions page in Hayase showing all six rows green and current:
+
+<p align="center">
+  <img src="./.github/assets/hayase-extensions.png" alt="anitorrent extensions live in Hayase" width="720">
+</p>
+
 ## Install in Hayase
 
 Settings → Extensions → Repositories → paste → Import Extensions:

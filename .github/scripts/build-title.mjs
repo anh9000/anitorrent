@@ -5,6 +5,7 @@ const FONT_URL = 'https://fonts.gstatic.com/s/pixelifysans/v3/CHy2V-3HFUT7aC4iv1
 const TEXT = 'anitorrent'
 const FONT_SIZE = 96
 const PADDING = 12
+const LETTER_SPACING_FACTOR = 0.93
 
 console.log('Downloading Pixelify Sans...')
 const fontRes = await fetch(FONT_URL)
@@ -23,7 +24,7 @@ for (const ch of TEXT) {
   const glyph = font.charToGlyph(ch)
   const glyphPath = glyph.getPath(cursor, FONT_SIZE, FONT_SIZE)
   combined.extend(glyphPath)
-  cursor += (glyph.advanceWidth || 0) * scale
+  cursor += (glyph.advanceWidth || 0) * scale * LETTER_SPACING_FACTOR
 }
 
 const bbox = combined.getBoundingBox()
