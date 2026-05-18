@@ -45,7 +45,7 @@ Built and verified against this Hayase build:
 Screenshot of the extensions page in Hayase showing all six rows green and current:
 
 <p align="center">
-  <img src="./.github/assets/hayase-extensions.png" alt="anitorrent extensions live in Hayase" width="720">
+  <img src="./.github/assets/installed-extensions.png" alt="anitorrent extensions live in Hayase" width="720">
 </p>
 
 ## Install in Hayase
