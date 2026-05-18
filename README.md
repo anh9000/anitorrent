@@ -5,7 +5,10 @@
   </picture>
 </p>
 
-Anime torrent extension built for [Hayase](https://hayase.watch). Six toggleable sources, auto-updating in the background, no manual maintenance.
+<p align="center">
+  Anime torrent extension built for <a href="https://hayase.watch">Hayase</a>.<br>
+  Six toggleable sources, auto-updating in the background, no manual maintenance.
+</p>
 
 > **Shiru note:** a [Shiru](https://github.com/RockinChaos/Shiru) manifest is also published, but this has **not been tested in an actual Shiru install**. The code was designed against the lowest-common-denominator API both apps accept, so it should work. If you try it in Shiru and hit a problem, please [open an issue](https://github.com/anh9000/anitorrent/issues) with the details.
 
@@ -40,7 +43,7 @@ Built and verified against this Hayase build:
 | Hayase Interface | `v6.4.366` |
 | Hayase Native | `6.4.69` |
 | Platform | Windows |
-| All six sources online | ✅ verified `2026-05-18` |
+| All six sources online | verified `2026-05-18` |
 
 The extensions page in Hayase, all six sources green and current:
 
