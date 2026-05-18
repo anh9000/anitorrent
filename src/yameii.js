@@ -148,6 +148,11 @@ async function rssSearch (query) {
     '&s=id&o=desc'
   const url = NYAA_BASE + '/' + qs
   const res = await fetch(url)
+  if (res.status === 429) {
+    const err = new Error('429')
+    err.rateLimited = true
+    throw err
+  }
   if (!res.ok) {
     throw new Error('Nyaa returned HTTP ' + res.status + ' for the Yameii feed. The site may be down or blocked on your network.')
   }
@@ -156,6 +161,25 @@ async function rssSearch (query) {
     throw new Error('Nyaa returned an unexpected response for the Yameii feed.')
   }
   return pickItems(text)
+}
+
+async function rssSearchWithRetry (query) {
+  try {
+    return await rssSearch(query)
+  } catch (err) {
+    if (err.rateLimited) {
+      await new Promise(r => setTimeout(r, 1500))
+      try {
+        return await rssSearch(query)
+      } catch (retryErr) {
+        if (retryErr.rateLimited) {
+          throw new Error('Nyaa is rate limiting requests for the Yameii feed. Wait a moment and try again.')
+        }
+        throw retryErr
+      }
+    }
+    throw err
+  }
 }
 
 function itemToResult (raw, opts) {
@@ -202,14 +226,10 @@ function titlesByLengthAsc (titles) {
   return [...titles].sort((a, b) => a.length - b.length)
 }
 
-function queryVariantsForTitle (title, opts) {
+function queryVariantsForTitle (title) {
   const base = trimTitleForQuery(title)
   if (!base) return []
-  const variants = [base]
-  if (opts.episode != null && !opts.batch && !opts.movie) {
-    variants.push(base + ' ' + pad(opts.episode))
-  }
-  return variants
+  return [base]
 }
 
 async function runSearch (query, opts) {
@@ -221,15 +241,15 @@ async function runSearch (query, opts) {
   const seen = new Set()
   const results = []
 
-  const titles = titlesByLengthAsc(query.titles).slice(0, 3)
-  outer: for (const title of titles) {
-    const variants = queryVariantsForTitle(title, opts)
+  const titles = titlesByLengthAsc(query.titles).slice(0, 2)
+  for (const title of titles) {
+    const variants = queryVariantsForTitle(title)
     for (const q of variants) {
       let items
       try {
-        items = await rssSearch(q)
+        items = await rssSearchWithRetry(q)
       } catch (err) {
-        if (results.length) break outer
+        if (results.length) return rankResults(results, resolution).slice(0, 30)
         throw err
       }
       for (const raw of items) {
@@ -242,7 +262,7 @@ async function runSearch (query, opts) {
         results.push(r)
       }
     }
-    if (results.length >= 20) break
+    if (results.length >= 10) break
   }
 
   return rankResults(results, resolution).slice(0, 30)
