@@ -152,7 +152,12 @@ function pickItems(xml) {
 async function rssSearch(query) {
   const q = TITLE_PREFIX + (query ? " " + query : "");
   const url = NYAA_BASE + "/?page=rss&q=" + encodeURIComponent(q) + "&c=" + ANIME_CATEGORY + "&s=id&o=desc";
-  const res = await fetch(url);
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    throw new Error("Cannot reach nyaa.si. Check your internet connection or try again later.");
+  }
   if (res.status === 429) {
     const err = new Error("429");
     err.rateLimited = true;

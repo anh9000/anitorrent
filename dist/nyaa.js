@@ -159,7 +159,12 @@ function hitsExclusion(title, exclusions) {
 }
 async function rssSearch(query) {
   const url = NYAA_BASE + "/?page=rss&q=" + encodeURIComponent(query) + "&c=" + ANIME_CATEGORY + "&s=id&o=desc";
-  const res = await fetch(url);
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    throw new Error("Cannot reach nyaa.si. Check your internet connection or try again later.");
+  }
   if (res.status === 429) {
     const err = new Error("429");
     err.rateLimited = true;
