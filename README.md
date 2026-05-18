@@ -9,6 +9,7 @@ Anime torrent search extensions for [Hayase](https://hayase.watch) and [Shiru](h
 | Seadex | high | Community-curated best releases |
 | SubsPlease | high | Currently-airing weekly fansubs (mostly subbed) |
 | Yameii | high | English-dub uploads from the Yameii uploader |
+| ToonsHub | high | Currently-airing dual-audio and multi-sub releases from ToonsHub |
 
 All sources declare `media: "both"` in the manifest so Hayase shows both Sub and Dub badges. The badge is purely informational, it doesn't filter results.
 

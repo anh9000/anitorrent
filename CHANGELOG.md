@@ -4,6 +4,16 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.5.0] - 2026-05-18
+
+### Added
+
+- **ToonsHub** (`toonshub 1.0.0`, accuracy: high). Sixth source. Filters nyaa.si to the [ToonsHub] release group via title-prefix search (the group uploads as Anonymous on nyaa, no single user account, so we filter by `?q=[ToonsHub]+<show>` instead of `?u=`). ToonsHub covers many currently-airing shows including Nippon Sangoku, LIAR GAME, Klutzy Class Monitor, Frieren, Witch Hat Atelier, and ships both dual-audio (sub+dub combined) and multi-sub variants per episode. Bridges the gap on shows where SubsPlease and Yameii have no coverage.
+
+### Fixed
+
+- **Search queries with hyphenated tokens were returning 0 results** (`nyaa 1.0.7`, `yameii 1.0.3`, `toonshub 1.0.0`). Nyaa's full-text search rejects tokens like `skirt-take` when there is no uploader (`?u=`) filter on the query. Yameii happened to work because its `?u=Yameii` filter makes nyaa more lenient about token shape, but nyaa.js and toonshub.js were affected. Updated the query builder in all three sources to strip non-word characters (including hyphens) from search terms before sending to nyaa. Tokenized: `Ponkotsu Fuuki Iin to Skirt-take ga Futekisetsu...` is now searched as `ponkotsu fuuki iin skirt take` rather than `ponkotsu fuuki iin skirt-take`.
+
 ## [1.4.0] - 2026-05-18
 
 ### Added
@@ -108,6 +118,7 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.5.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.0
 [1.4.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.4.0
 [1.3.1]: https://github.com/anh9000/anitorrent/releases/tag/v1.3.1
 [1.3.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.3.0

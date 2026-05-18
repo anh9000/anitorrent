@@ -3,7 +3,7 @@
     "manifestVersion": 2,
     "name": "Nyaa",
     "id": "anitorrent.nyaa",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "type": "torrent",
     "accuracy": "medium",
     "updatePeers": false,
@@ -75,7 +75,7 @@
     "manifestVersion": 2,
     "name": "Yameii (Dubs)",
     "id": "anitorrent.yameii",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "type": "torrent",
     "accuracy": "high",
     "updatePeers": false,
@@ -88,5 +88,23 @@
     "icon": "https://nyaa.si/static/favicon.png",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/hayase/index.json",
     "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/yameii.js"
+  },
+  {
+    "manifestVersion": 2,
+    "name": "ToonsHub",
+    "id": "anitorrent.toonshub",
+    "version": "1.0.0",
+    "type": "torrent",
+    "accuracy": "high",
+    "updatePeers": false,
+    "ratio": 0,
+    "media": "both",
+    "languages": ["ALL"],
+    "nsfw": false,
+    "url": "aHR0cHM6Ly9ueWFhLnNp",
+    "description": "ToonsHub releases on nyaa.si. Title-prefix filter for the [ToonsHub] group. Wide coverage of currently-airing shows, both subbed and dual-audio variants.",
+    "icon": "https://nyaa.si/static/favicon.png",
+    "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/hayase/index.json",
+    "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/toonshub.js"
   }
 ]
