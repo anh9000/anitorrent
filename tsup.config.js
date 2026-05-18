@@ -1,7 +1,11 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: { nyaa: 'src/nyaa.js' },
+  entry: {
+    nyaa: 'src/nyaa.js',
+    animetosho: 'src/animetosho.js',
+    seadex: 'src/seadex.js'
+  },
   outDir: 'dist',
   format: ['esm'],
   target: 'es2020',
