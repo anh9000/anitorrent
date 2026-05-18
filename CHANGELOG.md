@@ -4,6 +4,27 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.5.4] - 2026-05-18 - First stable release
+
+Marks the first stable, audited release. Full code audit done across all six sources, manifests, build pipeline, mapping pipeline, and CI workflows. One bug found and fixed (below). Comprehensive smoke test run across six shows × six sources, zero garbage results, zero unexpected failures.
+
+### Fixed
+
+- **nyaa 1.0.9**, **yameii 1.0.6**, **toonshub 1.0.3**. The three nyaa-based sources' `rssSearch()` was calling `await fetch(url)` without a try/catch wrapper. If the user lost connectivity mid-search, they'd see a raw `TypeError` instead of the friendly "Cannot reach nyaa.si" message that animetosho/seadex/subsplease already had. Added consistent network-error wrapping.
+
+### Stable surface
+
+| Source | Version | Accuracy | Catalog |
+|---|---|---|---|
+| Nyaa | 1.0.9 | medium | Universal firehose, every anime upload |
+| AnimeTosho | 1.0.4 | high | Anidb-indexed aggregator, batch packs |
+| Seadex | 1.0.1 | high | Community-curated best-release picks |
+| SubsPlease | 1.0.2 | high | Currently-airing weekly fansubs |
+| Yameii (Dubs) | 1.0.6 | high | English-dub re-encodes from the Yameii uploader |
+| ToonsHub | 1.0.3 | high | ToonsHub group dual-audio + multi-sub releases |
+
+All six sources declare `manifestVersion: 2`, `media: "both"`, `languages: ["ALL"]`, and have consistent error handling, rate-limit retry, and result filtering.
+
 ## [1.5.3] - 2026-05-18
 
 ### Fixed
@@ -144,6 +165,7 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.5.4]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.4
 [1.5.3]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.3
 [1.5.2]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.2
 [1.5.1]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.1
