@@ -8,14 +8,14 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 
 ### Fixed
 
-- **nyaa 1.0.3** — Was returning only 4 of 15+ available episode releases. Two root causes, both fixed:
+- **nyaa 1.0.3**. Was returning only 4 of 15+ available episode releases. Two root causes, both fixed:
   - Nyaa's tokenizer treats `S01E07` as a single token, so passing `07` in the search query filtered out every release using `S01E07` notation. Fix: two-pass query per title (once without episode for `S01E07`-style, once with episode for `- 07`-style), merged by infoHash.
   - Query was sorted by `s=seeders&o=desc`, so fresh weekly drops with low seeder counts were pushed off the first 75-item page. Fix: `s=id&o=desc` (newest first), matching the default nyaa.si browse experience.
   - Local ranking key order is now: resolution match desc, then date desc, then seeders desc.
 
 ### Changed
 
-- **animetosho 1.0.1** — Same ranking change: resolution match desc, then date desc, then seeders desc. Surfaces freshly indexed releases ahead of older popular ones.
+- **animetosho 1.0.1**. Same ranking change: resolution match desc, then date desc, then seeders desc. Surfaces freshly indexed releases ahead of older popular ones.
 
 ## [1.1.0] - 2026-05-18
 
@@ -27,13 +27,13 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 
 ### Fixed
 
-- **nyaa 1.0.2** — Strict episode filter in `single` mode. Previously, the episode number was only a ranking hint and nyaa's full-text search would surface ep 06 or ep 01 results when the user asked for ep 7. Now drops any result whose title doesn't contain the requested episode number (with common delimiters: ` 07 `, `-07-`, `E07`, `S01E07`, `.07.`, `[07]`, etc.).
+- **nyaa 1.0.2**. Strict episode filter in `single` mode. Previously, the episode number was only a ranking hint and nyaa's full-text search would surface ep 06 or ep 01 results when the user asked for ep 7. Now drops any result whose title doesn't contain the requested episode number (with common delimiters: ` 07 `, `-07-`, `E07`, `S01E07`, `.07.`, `[07]`, etc.).
 
 ## [1.0.1] - 2026-05-18
 
 ### Fixed
 
-- **nyaa 1.0.1** — Stopped returning unrelated shows in search results. Three changes:
+- **nyaa 1.0.1**. Stopped returning unrelated shows in search results. Three changes:
   - Trim long titles at the first colon and cap at 4 significant words before querying nyaa (so "Nippon Sangoku: The Three Nations of the Crimson Sun" becomes `nippon sangoku`, not an 11-token soup).
   - Drop resolution from the query string. It only diluted nyaa's full-text match. Still used for ranking.
   - Post-filter: every result title must contain at least one significant ≥3-char non-stopword from one of the show's titles. Drops anything that snuck in on episode/resolution token alone.
