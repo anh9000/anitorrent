@@ -4,7 +4,8 @@ export default defineConfig({
   entry: {
     nyaa: 'src/nyaa.js',
     animetosho: 'src/animetosho.js',
-    seadex: 'src/seadex.js'
+    seadex: 'src/seadex.js',
+    subsplease: 'src/subsplease.js'
   },
   outDir: 'dist',
   format: ['esm'],
