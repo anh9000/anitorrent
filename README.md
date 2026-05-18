@@ -12,6 +12,12 @@ Anime torrent search extensions for [Hayase](https://hayase.watch) and [Shiru](h
 
 All sources declare `media: "both"` in the manifest so Hayase shows both Sub and Dub badges. The badge is purely informational, it doesn't filter results.
 
+## ID mapping
+
+`data/anilist-to-anidb.json` is a compact 170 KB map (~13,000 pairs) extracted from the [manami-project anime-offline-database](https://github.com/manami-project/anime-offline-database). The AnimeTosho extension fetches this file on first call (cached in memory for the session) to convert AniList IDs to AniDB IDs when Hayase doesn't provide them, enabling high-accuracy lookups via AnimeTosho's `?aid=<id>` endpoint.
+
+The mapping is regenerated weekly by `.github/workflows/mappings.yml` running `scripts/build-mappings.js`. Manami publishes "Delta Update" commits multiple times per week and tagged weekly releases, so the chain stays fresh automatically.
+
 ## Install
 
 ### Hayase
