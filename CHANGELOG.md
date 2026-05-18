@@ -4,6 +4,12 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.1.4] - 2026-05-18
+
+### Fixed
+
+- **nyaa 1.0.5** and **animetosho 1.0.3**. Batch mode was returning single-episode releases tagged as batches. When a user searched for episode 7, Hayase's batch query would return ep 04, ep 05, ep 06 results from the same show, each shown with a "Batch" pill in the UI. Now both sources filter batch results to only releases whose title actually matches batch patterns (`Complete`, `Batch`, `S01` without specific episode, `01-12` episode ranges, etc.). Single-episode releases no longer leak into batch results.
+
 ## [1.1.3] - 2026-05-18
 
 ### Fixed
@@ -69,6 +75,7 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.1.4]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.4
 [1.1.3]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.3
 [1.1.2]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.2
 [1.1.1]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.1
