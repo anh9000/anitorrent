@@ -27,7 +27,7 @@ const STOPWORDS = new Set([
 ])
 
 function escapeQuery (str) {
-  return str.replace(/[^\w\s\-.]/g, ' ').replace(/\s+/g, ' ').trim()
+  return String(str || '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 function significantTokens (title) {

@@ -53,7 +53,7 @@ var STOPWORDS = /* @__PURE__ */ new Set([
   "special"
 ]);
 function escapeQuery(str) {
-  return str.replace(/[^\w\s\-.]/g, " ").replace(/\s+/g, " ").trim();
+  return String(str || "").replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 function significantTokens(title) {
   return escapeQuery(title).toLowerCase().split(/\s+/).filter((t) => t.length >= 3 && !STOPWORDS.has(t));

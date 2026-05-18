@@ -6,7 +6,8 @@ export default defineConfig({
     animetosho: 'src/animetosho.js',
     seadex: 'src/seadex.js',
     subsplease: 'src/subsplease.js',
-    yameii: 'src/yameii.js'
+    yameii: 'src/yameii.js',
+    toonshub: 'src/toonshub.js'
   },
   outDir: 'dist',
   format: ['esm'],

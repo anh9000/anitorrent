@@ -1,5 +1,5 @@
 const NYAA_BASE = 'https://nyaa.si'
-const UPLOADER = 'Yameii'
+const TITLE_PREFIX = '[ToonsHub]'
 const ANIME_CATEGORY = '1_2'
 
 const TRACKERS = [
@@ -141,19 +141,18 @@ function pickItems (xml) {
 }
 
 async function rssSearch (query) {
-  const qs = '?u=' + encodeURIComponent(UPLOADER) +
-    '&page=rss' +
-    (query ? '&q=' + encodeURIComponent(query) : '') +
+  const q = TITLE_PREFIX + (query ? ' ' + query : '')
+  const url = NYAA_BASE + '/?page=rss' +
+    '&q=' + encodeURIComponent(q) +
     '&c=' + ANIME_CATEGORY +
     '&s=id&o=desc'
-  const url = NYAA_BASE + '/' + qs
   const res = await fetch(url)
   if (!res.ok) {
-    throw new Error('Nyaa returned HTTP ' + res.status + ' for the Yameii feed. The site may be down or blocked on your network.')
+    throw new Error('Nyaa returned HTTP ' + res.status + ' for the ToonsHub feed. The site may be down or blocked on your network.')
   }
   const text = await res.text()
   if (!text.includes('<rss') && !text.includes('<item>')) {
-    throw new Error('Nyaa returned an unexpected response for the Yameii feed.')
+    throw new Error('Nyaa returned an unexpected response for the ToonsHub feed.')
   }
   return pickItems(text)
 }
@@ -162,6 +161,7 @@ function itemToResult (raw, opts) {
   const title = pickTag(raw, 'title')
   const hash = pickTag(raw, 'nyaa:infoHash').toLowerCase()
   if (!title || !hash) return null
+  if (!title.includes(TITLE_PREFIX)) return null
 
   if (hitsExclusion(title, opts.exclusions)) return null
 
@@ -248,7 +248,7 @@ async function runSearch (query, opts) {
   return rankResults(results, resolution).slice(0, 30)
 }
 
-export default new class Yameii {
+export default new class ToonsHub {
   async single (query) {
     return runSearch(query, { episode: query.episode })
   }
@@ -265,7 +265,8 @@ export default new class Yameii {
   }
 
   async test () {
-    const url = NYAA_BASE + '/?u=' + encodeURIComponent(UPLOADER) + '&page=rss&c=' + ANIME_CATEGORY
+    const url = NYAA_BASE + '/?page=rss&q=' + encodeURIComponent(TITLE_PREFIX) +
+      '&c=' + ANIME_CATEGORY
     let res
     try {
       res = await fetch(url)
@@ -273,7 +274,7 @@ export default new class Yameii {
       throw new Error('Cannot reach nyaa.si. Check your internet connection or try again later.')
     }
     if (!res.ok) {
-      throw new Error('Nyaa returned HTTP ' + res.status + ' for the Yameii feed.')
+      throw new Error('Nyaa returned HTTP ' + res.status + ' for the ToonsHub feed.')
     }
     return true
   }
