@@ -4,6 +4,14 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.1.3] - 2026-05-18
+
+### Fixed
+
+- **animetosho 1.0.2**. Was returning 75 completely unrelated shows (Hokuto no Ken, Tensei Shitara Slime, Classroom of the Elite, etc.) for searches like Nippon Sangoku. Two compounding causes, both fixed:
+  - AnimeTosho's API silently returns the global 75-item recent-uploads feed when called with an invalid ID (`?eid=0`, `?eid=null`, `?eid=undefined`, `?show=999999`, etc.) instead of an empty array. The old code trusted whatever truthy value Hayase passed in `query.anidbEid` or `query.anidbAid` and would hand the API a value that triggered this silent fallback. Fix: validate the ID is a positive integer before calling AnimeTosho, fall through to text search otherwise.
+  - The result-title token filter only required one show-name token to match, which let occasional garbage results slip through if they happened to share a generic word with the show. Fix: require 2+ token matches when the show has 3 or more significant tokens in its titles, keeps 1-token matches for shows with very short names.
+
 ## [1.1.2] - 2026-05-18
 
 ### Fixed
@@ -61,6 +69,7 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.1.3]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.3
 [1.1.2]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.2
 [1.1.1]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.1
 [1.1.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.0
