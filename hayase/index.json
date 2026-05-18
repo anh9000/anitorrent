@@ -1,0 +1,20 @@
+[
+  {
+    "manifestVersion": 2,
+    "name": "Nyaa",
+    "id": "anitorrent.nyaa",
+    "version": "1.0.0",
+    "type": "torrent",
+    "accuracy": "medium",
+    "updatePeers": false,
+    "ratio": 0,
+    "media": "sub",
+    "languages": ["ALL"],
+    "nsfw": false,
+    "url": "aHR0cHM6Ly9ueWFhLnNp",
+    "description": "Searches nyaa.si directly for anime torrents. No third-party proxies.",
+    "icon": "https://nyaa.si/static/favicon.png",
+    "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/hayase/index.json",
+    "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/nyaa.js"
+  }
+]
