@@ -73,6 +73,15 @@ function resultMatchesShow(resultTitle, tokens) {
   }
   return false;
 }
+function titleHasEpisode(title, ep) {
+  if (ep == null) return true;
+  const n = String(ep).replace(/^0+/, "") || "0";
+  const re = new RegExp(
+    "(?:^|[\\s\\-_.\\[\\(])(?:e|ep|episode\\s*|s\\d{1,2}e)?0*" + n + "(?:v\\d)?(?:[\\s\\-_.\\]\\)]|$)",
+    "i"
+  );
+  return re.test(title);
+}
 function trimTitleForQuery(title) {
   const colon = title.indexOf(":");
   const base = colon > 0 ? title.slice(0, colon) : title;
@@ -221,6 +230,7 @@ async function runSearch(query, opts) {
       if (!r) continue;
       if (seen.has(r.hash)) continue;
       if (!resultMatchesShow(r.title, showTokens)) continue;
+      if (opts.episode != null && !opts.batch && !opts.movie && !titleHasEpisode(r.title, opts.episode)) continue;
       seen.add(r.hash);
       results.push(r);
     }
