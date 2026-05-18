@@ -57,15 +57,12 @@ function resultMatchesShow (resultTitle, tokens) {
 function titleHasEpisode (title, ep) {
   if (ep == null) return true
   const n = String(ep).replace(/^0+/, '') || '0'
-  const re = new RegExp(
-    '(?:^|[\\s\\-_.\\[\\(])' +
-    '(?:e|ep|episode\\s*|s\\d{1,2}e)?' +
-    '0*' + n +
-    '(?:v\\d)?' +
-    '(?:[\\s\\-_.\\]\\)]|$)',
-    'i'
-  )
-  return re.test(title)
+  const patterns = [
+    new RegExp('\\b(?:e|ep|episode\\s*|s\\d{1,2}e)0*' + n + '\\b(?!\\d)', 'i'),
+    new RegExp('[\\s._][-~]\\s+0*' + n + '(?:v\\d)?(?=[\\s\\[\\(]|$)', 'i'),
+    new RegExp('[\\[\\(]0*' + n + '(?:v\\d)?[\\]\\)]', 'i')
+  ]
+  return patterns.some(re => re.test(title))
 }
 
 function trimTitleForQuery (title) {

@@ -1,5 +1,32 @@
 // src/animetosho.js
 var BASE = "https://feed.animetosho.org/json";
+var MAPPING_URL = "https://raw.githubusercontent.com/anh9000/anitorrent/main/data/anilist-to-anidb.json";
+var mappingCache = null;
+var mappingPromise = null;
+async function getMapping() {
+  if (mappingCache) return mappingCache;
+  if (!mappingPromise) {
+    mappingPromise = (async () => {
+      try {
+        const r = await fetch(MAPPING_URL);
+        if (!r.ok) return {};
+        const data = await r.json();
+        mappingCache = data && typeof data === "object" ? data : {};
+        return mappingCache;
+      } catch {
+        return {};
+      }
+    })();
+  }
+  return mappingPromise;
+}
+async function resolveAnidbAid(query) {
+  if (validId(query.anidbAid)) return Number(query.anidbAid);
+  if (!validId(query.anilistId)) return null;
+  const map = await getMapping();
+  const aid = map[String(query.anilistId)];
+  return validId(aid) ? Number(aid) : null;
+}
 var STOPWORDS = /* @__PURE__ */ new Set([
   "the",
   "and",
@@ -82,11 +109,12 @@ function looksLikeBatch(title) {
 function titleHasEpisode(title, ep) {
   if (ep == null) return true;
   const n = String(ep).replace(/^0+/, "") || "0";
-  const re = new RegExp(
-    "(?:^|[\\s\\-_.\\[\\(])(?:e|ep|episode\\s*|s\\d{1,2}e)?0*" + n + "(?:v\\d)?(?:[\\s\\-_.\\]\\)]|$)",
-    "i"
-  );
-  return re.test(title);
+  const patterns = [
+    new RegExp("\\b(?:e|ep|episode\\s*|s\\d{1,2}e)0*" + n + "\\b(?!\\d)", "i"),
+    new RegExp("[\\s._][-~]\\s+0*" + n + "(?:v\\d)?(?=[\\s\\[\\(]|$)", "i"),
+    new RegExp("[\\[\\(]0*" + n + "(?:v\\d)?[\\]\\)]", "i")
+  ];
+  return patterns.some((re) => re.test(title));
 }
 function hitsExclusion(title, exclusions) {
   if (!exclusions || !exclusions.length) return false;
@@ -157,8 +185,8 @@ async function fetchByEid(eid) {
   const items = await tryFetch(BASE + "?eid=" + encodeURIComponent(eid));
   return items.map((i) => toResult(i, "high")).filter(Boolean);
 }
-async function fetchByShow(aid, type) {
-  const items = await tryFetch(BASE + "?show=" + encodeURIComponent(aid) + "&type=" + encodeURIComponent(type));
+async function fetchByAid(aid) {
+  const items = await tryFetch(BASE + "?aid=" + encodeURIComponent(aid));
   return items.map((i) => toResult(i, "high")).filter(Boolean);
 }
 async function fetchByText(titles) {
@@ -182,41 +210,41 @@ async function fetchByText(titles) {
   }
   return [...seen.values()];
 }
+function filterAndShape(raw, query, mode, showTokens, exclusions, minHits) {
+  let out = dedupe(raw).filter((r) => !hitsExclusion(r.title, exclusions)).filter((r) => resultMatchesShow(r.title, showTokens, minHits));
+  if (mode === "single" && query.episode != null) {
+    out = out.filter((r) => titleHasEpisode(r.title, query.episode));
+  }
+  if (mode === "batch") {
+    out = out.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch" }));
+  }
+  return out;
+}
 async function search(query, mode) {
   if (!query) return [];
   const exclusions = query.exclusions || [];
   const resolution = query.resolution || "";
   const showTokens = buildTitleTokens(query.titles || []);
-  let results = [];
+  const minHits = showTokens.size >= 3 ? 2 : 1;
+  const resolvedAid = await resolveAnidbAid(query);
+  let raw = [];
   if (mode === "single" && validId(query.anidbEid)) {
     try {
-      results = await fetchByEid(query.anidbEid);
+      raw = await fetchByEid(query.anidbEid);
     } catch (_) {
-      results = [];
+      raw = [];
     }
-  } else if (mode === "batch" && validId(query.anidbAid)) {
+  } else if (resolvedAid) {
     try {
-      results = await fetchByShow(query.anidbAid, "batches");
+      raw = await fetchByAid(resolvedAid);
     } catch (_) {
-      results = [];
-    }
-  } else if (mode === "movie" && validId(query.anidbAid)) {
-    try {
-      results = await fetchByShow(query.anidbAid, "movies");
-    } catch (_) {
-      results = [];
+      raw = [];
     }
   }
+  let results = filterAndShape(raw, query, mode, showTokens, exclusions, minHits);
   if (!results.length && (query.titles || []).length) {
-    results = await fetchByText(query.titles);
-  }
-  const minHits = showTokens.size >= 3 ? 2 : 1;
-  results = dedupe(results).filter((r) => !hitsExclusion(r.title, exclusions)).filter((r) => resultMatchesShow(r.title, showTokens, minHits));
-  if (mode === "single" && query.episode != null) {
-    results = results.filter((r) => titleHasEpisode(r.title, query.episode));
-  }
-  if (mode === "batch") {
-    results = results.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch" }));
+    const textRaw = await fetchByText(query.titles);
+    results = filterAndShape(textRaw, query, mode, showTokens, exclusions, minHits);
   }
   return rank(results, resolution).slice(0, 30);
 }
