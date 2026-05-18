@@ -1,4 +1,9 @@
-# anitorrent
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/title-dark.svg">
+    <img src="./assets/title-light.svg" alt="anitorrent" width="420">
+  </picture>
+</p>
 
 Anime torrent search extensions for [Hayase](https://hayase.watch) and [Shiru](https://github.com/RockinChaos/Shiru). One install URL, six toggleable sources.
 
