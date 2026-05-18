@@ -48,6 +48,10 @@ npm run build
 
 Output: `dist/nyaa.js`. CI rebuilds on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for the full version history.
+
 ## License
 
 GPL-3.0. See [LICENSE](./LICENSE).
