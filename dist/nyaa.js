@@ -157,7 +157,7 @@ function hitsExclusion(title, exclusions) {
   return exclusions.some((kw) => kw && lower.includes(String(kw).toLowerCase()));
 }
 async function rssSearch(query) {
-  const url = NYAA_BASE + "/?page=rss&q=" + encodeURIComponent(query) + "&c=" + ANIME_CATEGORY + "&s=seeders&o=desc";
+  const url = NYAA_BASE + "/?page=rss&q=" + encodeURIComponent(query) + "&c=" + ANIME_CATEGORY + "&s=id&o=desc";
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error("Nyaa returned HTTP " + res.status + ". The site may be down or blocked on your network.");
@@ -193,20 +193,25 @@ function itemToResult(raw, opts) {
   };
 }
 function rankResults(results, resolution) {
-  if (!resolution) return results;
   return results.sort((a, b) => {
-    const am = matchesResolution(a.title, resolution) ? 1 : 0;
-    const bm = matchesResolution(b.title, resolution) ? 1 : 0;
-    if (am !== bm) return bm - am;
+    if (resolution) {
+      const am = matchesResolution(a.title, resolution) ? 1 : 0;
+      const bm = matchesResolution(b.title, resolution) ? 1 : 0;
+      if (am !== bm) return bm - am;
+    }
+    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0);
+    if (dt !== 0) return dt;
     return b.seeders - a.seeders;
   });
 }
-function buildQuery(title, opts) {
-  let q = trimTitleForQuery(title);
+function queryVariantsForTitle(title, opts) {
+  const base = trimTitleForQuery(title);
+  if (!base) return [];
+  const variants = [base];
   if (opts.episode != null && !opts.batch && !opts.movie) {
-    q += " " + pad(opts.episode);
+    variants.push(base + " " + pad(opts.episode));
   }
-  return q;
+  return variants;
 }
 async function runSearch(query, opts) {
   if (!query.titles || !query.titles.length) return [];
@@ -216,23 +221,25 @@ async function runSearch(query, opts) {
   const seen = /* @__PURE__ */ new Set();
   const results = [];
   const titles = titlesByLengthAsc(query.titles).slice(0, 3);
-  for (const title of titles) {
-    const q = buildQuery(title, opts);
-    let items;
-    try {
-      items = await rssSearch(q);
-    } catch (err) {
-      if (results.length) break;
-      throw err;
-    }
-    for (const raw of items) {
-      const r = itemToResult(raw, { exclusions, batch: opts.batch });
-      if (!r) continue;
-      if (seen.has(r.hash)) continue;
-      if (!resultMatchesShow(r.title, showTokens)) continue;
-      if (opts.episode != null && !opts.batch && !opts.movie && !titleHasEpisode(r.title, opts.episode)) continue;
-      seen.add(r.hash);
-      results.push(r);
+  outer: for (const title of titles) {
+    const variants = queryVariantsForTitle(title, opts);
+    for (const q of variants) {
+      let items;
+      try {
+        items = await rssSearch(q);
+      } catch (err) {
+        if (results.length) break outer;
+        throw err;
+      }
+      for (const raw of items) {
+        const r = itemToResult(raw, { exclusions, batch: opts.batch });
+        if (!r) continue;
+        if (seen.has(r.hash)) continue;
+        if (!resultMatchesShow(r.title, showTokens)) continue;
+        if (opts.episode != null && !opts.batch && !opts.movie && !titleHasEpisode(r.title, opts.episode)) continue;
+        seen.add(r.hash);
+        results.push(r);
+      }
     }
     if (results.length >= 20) break;
   }
