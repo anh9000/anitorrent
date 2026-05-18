@@ -4,6 +4,17 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.5.1] - 2026-05-18
+
+### Changed
+
+- **toonshub 1.0.1**. Manifest description now mentions the group's public Telegram (`t.me/thtorrents`), since the actual uploader on nyaa is Anonymous and users may want to verify or follow the source directly.
+
+### Docs
+
+- README restructured to distinguish core sources (Nyaa, AnimeTosho, Seadex, SubsPlease) from curator picks (Yameii, ToonsHub). The curator picks ship enabled by default but are entirely toggleable in Hayase, included because the maintainer uses those specific uploaders.
+- README adds an explicit "Hayase tested, Shiru not yet tested" note in the install section. The Shiru manifest is published and the code was designed against the lowest-common-denominator API both apps accept, but no real-world Shiru install has been verified. Users hitting issues in Shiru are asked to open a repo issue.
+
 ## [1.5.0] - 2026-05-18
 
 ### Added
@@ -118,6 +129,7 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.5.1]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.1
 [1.5.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.0
 [1.4.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.4.0
 [1.3.1]: https://github.com/anh9000/anitorrent/releases/tag/v1.3.1

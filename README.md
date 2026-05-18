@@ -1,58 +1,54 @@
 # anitorrent
 
-Anime torrent search extensions for [Hayase](https://hayase.watch) and [Shiru](https://github.com/RockinChaos/Shiru). One install URL, four toggleable sources:
+Anime torrent search extensions for [Hayase](https://hayase.watch) and [Shiru](https://github.com/RockinChaos/Shiru). One install URL, six toggleable sources.
+
+## Sources
+
+### Core (recommended for everyone)
 
 | Source | Accuracy | Best for |
 |---|---|---|
-| Nyaa | medium | Raw firehose, full coverage |
-| AnimeTosho | high | Anidb-mapped shows, batch packs |
-| Seadex | high | Community-curated best releases |
-| SubsPlease | high | Currently-airing weekly fansubs (mostly subbed) |
-| Yameii | high | English-dub uploads from the Yameii uploader |
-| ToonsHub | high | Currently-airing dual-audio and multi-sub releases from ToonsHub |
+| Nyaa | medium | Raw firehose, full coverage of every anime upload |
+| AnimeTosho | high | Anidb-mapped lookups for older / popular shows + batch packs |
+| Seadex | high | Community-curated "best release" picks |
+| SubsPlease | high | Currently-airing weekly fansubs |
 
-All sources declare `media: "both"` in the manifest so Hayase shows both Sub and Dub badges. The badge is purely informational, it doesn't filter results.
+### Curator picks (optional)
 
-## ID mapping
+These are personal picks that ship enabled by default but are entirely toggleable. Disable them in Settings → Extensions if you don't want them.
 
-`data/anilist-to-anidb.json` is a compact 170 KB map (~13,000 pairs) extracted from the [manami-project anime-offline-database](https://github.com/manami-project/anime-offline-database). The AnimeTosho extension fetches this file on first call (cached in memory for the session) to convert AniList IDs to AniDB IDs when Hayase doesn't provide them, enabling high-accuracy lookups via AnimeTosho's `?aid=<id>` endpoint.
+| Source | Accuracy | What it adds |
+|---|---|---|
+| Yameii | high | Single uploader's English dub re-encodes from nyaa. Narrow catalog but consistent quality. IRC: `#Yameii@irc.rizon.net` |
+| ToonsHub | high | Releases from the ToonsHub group: dual-audio and multi-sub variants for many currently-airing shows. Telegram: [t.me/thtorrents](https://t.me/thtorrents) |
 
-The mapping is regenerated weekly by `.github/workflows/mappings.yml` running `scripts/build-mappings.js`. Manami publishes "Delta Update" commits multiple times per week and tagged weekly releases, so the chain stays fresh automatically.
+All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub badges regardless. The badge is purely informational, it does not filter results.
 
 ## Install
 
-### Hayase
+### Hayase (tested, primary target)
 
-Settings → Extensions → Repositories → paste this URL → Import Extensions:
+Settings → Extensions → Repositories → paste → Import Extensions:
 
 ```
 https://raw.githubusercontent.com/anh9000/anitorrent/main/hayase/index.json
 ```
 
-### Shiru
+### Shiru (designed for, not yet tested)
 
-Settings → Extensions → paste this URL:
+The code was written against the lowest-common-denominator API that both Hayase and Shiru accept, and a dedicated Shiru manifest is published, but **this has not been verified in an actual Shiru install**. Results may vary. If you import it in Shiru and hit a problem, please open an issue on the repo with whatever error / behavior you see.
+
+Settings → Extensions → paste:
 
 ```
 https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json
 ```
 
-## What it does
+## ID mapping
 
-- Single-episode search: `<title> <zero-padded episode>`
-- Batch search: title only, biased toward results matching batch patterns (`Complete`, `Batch`, `01-12`, `S01`, etc.)
-- Movie search: title only
-- Falls back across alternative titles if the first one returns nothing
-- Honors `resolution` (re-ranks but does not hard-filter)
-- Honors `exclusions` (drops results whose title contains any excluded keyword)
-- Builds magnet links locally from infohash + standard public trackers (one round trip per query, no `.torrent` file fetch)
-- Returns real seeders, leechers, size, and upload date from the nyaa RSS feed
+`data/anilist-to-anidb.json` is a compact 170 KB map (~13,000 pairs) extracted from the [manami-project anime-offline-database](https://github.com/manami-project/anime-offline-database). The AnimeTosho extension fetches this file on first call (cached in memory for the session) to convert AniList IDs to AniDB IDs when Hayase doesn't provide them, enabling high-accuracy lookups via AnimeTosho's `?aid=<id>` endpoint.
 
-## What it does not do
-
-- ID mapping (anidb / anilist). Results are matched by title string, which is why accuracy is `medium`, not `high`. For high-accuracy mapping, see [AnimeTosho-style extensions](https://github.com/hayase-app/free-torrents).
-- NSFW (`sukebei.nyaa.si`). Anime SFW category only.
-- Authentication. Public RSS, no API key.
+The mapping is regenerated weekly by `.github/workflows/mappings.yml` running `scripts/build-mappings.js`. Manami publishes "Delta Update" commits multiple times per week and tagged weekly releases, so the chain stays fresh automatically with no manual action.
 
 ## Develop
 
@@ -61,7 +57,7 @@ npm install
 npm run build
 ```
 
-Output: `dist/nyaa.js`. CI rebuilds on every push that touches `src/`, `package.json`, or `tsup.config.js`.
+Output: `dist/*.js`. CI rebuilds on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
 ## Changelog
 
