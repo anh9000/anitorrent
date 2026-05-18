@@ -25,7 +25,7 @@
 
 ### Curator picks (optional)
 
-These are personal picks that ship enabled by default but are entirely toggleable. Disable them in Settings → Extensions if you don't want them.
+These are personal picks that ship enabled by default but are entirely toggleable.<br>Disable them in Settings → Extensions if you don't want them.
 
 | Source | Accuracy | What it adds |
 |---|---|---|
@@ -47,13 +47,13 @@ Built and verified against this Hayase build:
 
 The extensions page in Hayase, all six sources green and current:
 
-<p align="center">
+<p align="left">
   <img src="./.github/assets/installed-extensions.png" alt="anitorrent extensions installed in Hayase, all six rows online" width="720">
 </p>
 
 What a search looks like (Nippon Sangoku, episode 7), pulling results from multiple sources in one panel:
 
-<p align="center">
+<p align="left">
   <img src="./.github/assets/search-results.png" alt="anitorrent search results modal in Hayase showing torrent rows from multiple sources" width="720">
 </p>
 
