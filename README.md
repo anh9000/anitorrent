@@ -48,13 +48,17 @@ Built and verified against this Hayase build:
 The extensions page in Hayase, all six sources green and current:
 
 <p align="left">
-  <img src="./.github/assets/installed-extensions.png" alt="anitorrent extensions installed in Hayase, all six rows online" width="720">
+  <a href="https://raw.githubusercontent.com/anh9000/anitorrent/main/.github/assets/installed-extensions.png">
+    <img src="./.github/assets/installed-extensions.png" alt="anitorrent extensions installed in Hayase, all six rows online" width="720">
+  </a>
 </p>
 
 What a search looks like (Nippon Sangoku, episode 7), pulling results from multiple sources in one panel:
 
 <p align="left">
-  <img src="./.github/assets/search-results.png" alt="anitorrent search results modal in Hayase showing torrent rows from multiple sources" width="720">
+  <a href="https://raw.githubusercontent.com/anh9000/anitorrent/main/.github/assets/search-results.png">
+    <img src="./.github/assets/search-results.png" alt="anitorrent search results modal in Hayase showing torrent rows from multiple sources" width="720">
+  </a>
 </p>
 
 ## Install in Hayase
