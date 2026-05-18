@@ -40,5 +40,19 @@
     "description": "Manually curated best releases per anime.",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
     "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/seadex.js"
+  },
+  {
+    "name": "SubsPlease",
+    "id": "anitorrent.subsplease",
+    "version": "1.0.0",
+    "type": "torrent",
+    "accuracy": "high",
+    "ratio": 0,
+    "media": "sub",
+    "languages": ["US"],
+    "icon": "https://subsplease.org/favicon.ico",
+    "description": "Direct API for currently-airing weekly fansubs from SubsPlease.",
+    "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
+    "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/subsplease.js"
   }
 ]

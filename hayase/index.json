@@ -52,5 +52,23 @@
     "icon": "https://releases.moe/favicon.png",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/hayase/index.json",
     "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/seadex.js"
+  },
+  {
+    "manifestVersion": 2,
+    "name": "SubsPlease",
+    "id": "anitorrent.subsplease",
+    "version": "1.0.0",
+    "type": "torrent",
+    "accuracy": "high",
+    "updatePeers": true,
+    "ratio": 0,
+    "media": "sub",
+    "languages": ["US"],
+    "nsfw": false,
+    "url": "aHR0cHM6Ly9zdWJzcGxlYXNlLm9yZw==",
+    "description": "Direct API for currently-airing weekly fansubs from SubsPlease. Catches new episodes immediately on release, but only covers shows in their fansub catalog.",
+    "icon": "https://subsplease.org/favicon.ico",
+    "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/hayase/index.json",
+    "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/subsplease.js"
   }
 ]

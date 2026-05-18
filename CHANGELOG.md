@@ -4,6 +4,12 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.2.0] - 2026-05-18
+
+### Added
+
+- **SubsPlease** (`subsplease 1.0.0`, accuracy: high). Direct API for currently-airing weekly fansubs from SubsPlease. Catches new episodes immediately when SubsPlease releases them, no anidb dependency, no nyaa indexing lag. Limitation: only covers shows in the SubsPlease catalog (popular weeklies like Frieren, One Piece, LIAR GAME). Shows with built-in subs from streaming services (Nippon Sangoku, Hokuto no Ken etc.) are not in their catalog. Includes a base32-to-hex magnet hash decoder since SubsPlease serves base32-encoded info hashes.
+
 ## [1.1.4] - 2026-05-18
 
 ### Fixed
@@ -75,6 +81,7 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.2.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.2.0
 [1.1.4]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.4
 [1.1.3]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.3
 [1.1.2]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.2

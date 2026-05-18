@@ -1,8 +1,13 @@
 # anitorrent
 
-Nyaa torrent search extension for [Hayase](https://hayase.watch) and [Shiru](https://github.com/RockinChaos/Shiru).
+Anime torrent search extensions for [Hayase](https://hayase.watch) and [Shiru](https://github.com/RockinChaos/Shiru). One install URL, four toggleable sources:
 
-Queries `nyaa.si` directly via its RSS endpoint. No third-party proxies.
+| Source | Accuracy | Best for |
+|---|---|---|
+| Nyaa | medium | Raw firehose, full coverage |
+| AnimeTosho | high | Anidb-mapped shows, batch packs |
+| Seadex | high | Community-curated best releases |
+| SubsPlease | high | Currently-airing weekly fansubs |
 
 ## Install
 
