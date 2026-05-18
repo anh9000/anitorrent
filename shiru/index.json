@@ -2,15 +2,43 @@
   {
     "name": "Nyaa",
     "id": "anitorrent.nyaa",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "type": "torrent",
     "accuracy": "medium",
     "ratio": 0,
     "media": "sub",
     "languages": ["ALL"],
     "icon": "https://nyaa.si/static/favicon.png",
-    "description": "Searches nyaa.si directly for anime torrents. No third-party proxies.",
+    "description": "Searches nyaa.si directly for anime torrents.",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
     "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/nyaa.js"
+  },
+  {
+    "name": "AnimeTosho",
+    "id": "anitorrent.animetosho",
+    "version": "1.0.0",
+    "type": "torrent",
+    "accuracy": "high",
+    "ratio": 0,
+    "media": "both",
+    "languages": ["ALL"],
+    "icon": "https://animetosho.org/favicon.ico",
+    "description": "Aggregator with anidb episode-ID mapping.",
+    "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
+    "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/animetosho.js"
+  },
+  {
+    "name": "Seadex",
+    "id": "anitorrent.seadex",
+    "version": "1.0.0",
+    "type": "torrent",
+    "accuracy": "high",
+    "ratio": 0,
+    "media": "both",
+    "languages": ["ALL"],
+    "icon": "https://releases.moe/favicon.ico",
+    "description": "Manually curated best releases per anime.",
+    "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
+    "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/seadex.js"
   }
 ]
