@@ -4,6 +4,16 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.1.2] - 2026-05-18
+
+### Fixed
+
+- **seadex 1.0.1**. Icon URL changed from `releases.moe/favicon.ico` (308-redirected to a broken path) to `releases.moe/favicon.png` (returns a real 200 PNG). Seadex row in Hayase was showing a broken-image placeholder.
+
+### Changed
+
+- **nyaa 1.0.4**. Manifest `media` field changed from `sub` to `both`. nyaa.si hosts plenty of dubbed releases (Toonami rips, English dubs, etc.), so the Sub-only badge was inaccurate.
+
 ## [1.1.1] - 2026-05-18
 
 ### Fixed
@@ -51,6 +61,7 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.1.2]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.2
 [1.1.1]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.1
 [1.1.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.1.0
 [1.0.1]: https://github.com/anh9000/anitorrent/compare/a7cef7d...20beb65
