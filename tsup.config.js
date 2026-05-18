@@ -5,7 +5,8 @@ export default defineConfig({
     nyaa: 'src/nyaa.js',
     animetosho: 'src/animetosho.js',
     seadex: 'src/seadex.js',
-    subsplease: 'src/subsplease.js'
+    subsplease: 'src/subsplease.js',
+    yameii: 'src/yameii.js'
   },
   outDir: 'dist',
   format: ['esm'],
