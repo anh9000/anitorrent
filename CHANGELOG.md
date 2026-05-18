@@ -4,6 +4,15 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.5.3] - 2026-05-18
+
+### Fixed
+
+- **Nyaa rate-limiting (HTTP 429) on parallel searches** (nyaa 1.0.8, yameii 1.0.5, toonshub 1.0.2). When Hayase fires a search to all enabled sources at once, the three nyaa-based extensions (Nyaa, Yameii, ToonsHub) were collectively hammering nyaa.si with up to 18 parallel requests. Nyaa rate-limited some of them with 429, causing user-visible "Yameii encountered an error" splash. Two fixes shipped together:
+  - **All three sources now retry once on 429 after a 1.5s backoff.** Transient rate limits resolve automatically. Only if the retry also 429s does the user see an error, with a friendlier message asking them to wait.
+  - **Yameii and ToonsHub now use a single query per title** instead of the two-pass (`<title>` + `<title> <episode>`) the nyaa source needs. Yameii is uploader-filtered (`?u=Yameii`) and ToonsHub is title-prefix-filtered (`?q=[ToonsHub]`), both narrow enough that the single-pass query reliably hits the right releases. Cuts their per-search request count in half.
+  - Title-attempt cap dropped from 3 to 2 in all three sources. Combined, total parallel nyaa requests per search dropped from ~18 to ~6.
+
 ## [1.5.2] - 2026-05-18
 
 ### Changed
@@ -135,6 +144,7 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.5.3]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.3
 [1.5.2]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.2
 [1.5.1]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.1
 [1.5.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.0
