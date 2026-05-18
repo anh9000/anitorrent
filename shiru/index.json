@@ -72,14 +72,14 @@
   {
     "name": "ToonsHub",
     "id": "anitorrent.toonshub",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "type": "torrent",
     "accuracy": "high",
     "ratio": 0,
     "media": "both",
     "languages": ["ALL"],
     "icon": "https://nyaa.si/static/favicon.png",
-    "description": "ToonsHub group releases on nyaa.si.",
+    "description": "ToonsHub group releases on nyaa.si. Group's Telegram: t.me/thtorrents.",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
     "code": "https://raw.githubusercontent.com/anh9000/anitorrent/main/dist/toonshub.js"
   }
