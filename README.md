@@ -7,7 +7,8 @@
 
 <p align="center">
   Anime torrent extension built for <a href="https://hayase.watch">Hayase</a>.<br>
-  Six toggleable sources, auto-updating in the background, no manual maintenance.
+  Six toggleable sources, auto-updating in the background, no manual maintenance.<br>
+  <sub>Replaces the abandoned <code>hayase-app</code> extensions (Nyaa, AnimeTosho, Seadex) that have been marked Outdated for months.</sub>
 </p>
 
 > **Shiru note:** a [Shiru](https://github.com/RockinChaos/Shiru) manifest is also published, but this has **not been tested in an actual Shiru install**. The code was designed against the lowest-common-denominator API both apps accept, so it should work. If you try it in Shiru and hit a problem, please [open an issue](https://github.com/anh9000/anitorrent/issues) with the details.
@@ -78,6 +79,36 @@ https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json
 ```
 
 Settings → Extensions → paste. See the disclaimer at the top of this README.
+
+## Frequently asked questions
+
+### Where can I find Hayase extensions?
+
+This repo is one option. The previously-popular extensions in the `hayase-app` ecosystem (Nyaa, AnimeTosho, Seadex) have been marked Outdated and unmaintained for months. This pack picks up where they left off with six current, auto-updating sources.
+
+### How do I install extensions in Hayase?
+
+Open Hayase. Settings, then Extensions, then the Repositories tab. Paste the install URL into the textbox at the top. Click Import Extensions. The sources appear in the Extensions tab where you can toggle each one on or off independently.
+
+### How do I update Hayase extensions?
+
+Hayase auto-polls every extension's manifest URL on launch. As long as the extension's `update` field points to a maintained URL, new versions flow in automatically when you restart Hayase. For this pack specifically, just relaunch Hayase. All six sources stay current with no action from you.
+
+### Why are my existing Hayase extensions marked "Outdated"?
+
+The Outdated badge means the upstream manifest published a higher version number than what you have installed. For the official `hayase-app` extensions, this means the maintainers stopped publishing updates. Either delete those and import this pack, or wait for the original maintainers to ship a new version.
+
+### Does this Hayase extension work on Android?
+
+Yes. The same install URL works in Hayase on Android (8.0 or later). iOS is not supported because Hayase itself is not available on iOS, since Apple bans BitTorrent apps from the App Store.
+
+### Is this Hayase extension safe?
+
+All source code is in this public repo. It only talks to public APIs (`nyaa.si`, `feed.animetosho.org`, `releases.moe`, `subsplease.org`). No tracking, no analytics, no authentication. Every source file is in the `src/` directory and the bundles in `dist/` are auto-built from those sources by GitHub Actions.
+
+### What sources does this pack include?
+
+Six: Nyaa (raw firehose), AnimeTosho (anidb-mapped aggregator), Seadex (community-curated best releases), SubsPlease (weekly fansubs), Yameii (English dubs), and ToonsHub (dual-audio and multi-sub group releases). All toggleable.
 
 ## ID mapping
 
