@@ -31,28 +31,6 @@ https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json
 
 Settings → Extensions → paste. See the disclaimer at the top of this README.
 
-## Sources
-
-### Core (recommended for everyone)
-
-| Source | Accuracy | Best for |
-|---|---|---|
-| Nyaa | medium | Raw firehose, full coverage of every anime upload |
-| AnimeTosho | high | Anidb-mapped lookups for older / popular shows + batch packs |
-| Seadex | high | Community-curated "best release" picks |
-| SubsPlease | high | Currently-airing weekly fansubs |
-
-### Curator picks (optional)
-
-These are personal picks that ship enabled by default but are entirely toggleable.<br>Disable them in Settings → Extensions if you don't want them.
-
-| Source | Accuracy | What it adds |
-|---|---|---|
-| Yameii | high | Single uploader's English dub re-encodes from nyaa. Narrow catalog but consistent quality. IRC: `#Yameii@irc.rizon.net` |
-| ToonsHub | high | Releases from the ToonsHub group: dual-audio and multi-sub variants for many currently-airing shows. Telegram: [t.me/thtorrents](https://t.me/thtorrents) |
-
-All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub badges regardless. The badge is purely informational, it does not filter results.
-
 ## Tested on
 
 Built and verified against this Hayase build:
@@ -79,6 +57,28 @@ What a search looks like (Nippon Sangoku, episode 7), pulling results from multi
     <img src="./.github/assets/search-results.png" alt="anitorrent search results modal in Hayase showing torrent rows from multiple sources" width="720">
   </a>
 </p>
+
+## Sources
+
+### Core (recommended for everyone)
+
+| Source | Accuracy | Best for |
+|---|---|---|
+| Nyaa | medium | Raw firehose, full coverage of every anime upload |
+| AnimeTosho | high | Anidb-mapped lookups for older / popular shows + batch packs |
+| Seadex | high | Community-curated "best release" picks |
+| SubsPlease | high | Currently-airing weekly fansubs |
+
+### Curator picks (optional)
+
+These are personal picks that ship enabled by default but are entirely toggleable.<br>Disable them in Settings → Extensions if you don't want them.
+
+| Source | Accuracy | What it adds |
+|---|---|---|
+| Yameii | high | Single uploader's English dub re-encodes from nyaa. Narrow catalog but consistent quality. IRC: `#Yameii@irc.rizon.net` |
+| ToonsHub | high | Releases from the ToonsHub group: dual-audio and multi-sub variants for many currently-airing shows. Telegram: [t.me/thtorrents](https://t.me/thtorrents) |
+
+All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub badges regardless. The badge is purely informational, it does not filter results.
 
 ## Frequently asked questions
 
