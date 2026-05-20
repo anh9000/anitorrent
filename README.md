@@ -11,8 +11,6 @@
   <sub>Replaces the abandoned <code>hayase-app</code> extensions (Nyaa, AnimeTosho, Seadex) that have been marked Outdated for months.</sub>
 </p>
 
-> **Shiru note:** a [Shiru](https://github.com/RockinChaos/Shiru) manifest is also published, but this has **not been tested in an actual Shiru install**. The code was designed against the lowest-common-denominator API both apps accept, so it should work. If you try it in Shiru and hit a problem, please [open an issue](https://github.com/anh9000/anitorrent/issues) with the details.
-
 ## Install in Hayase
 
 Settings → Extensions → Repositories → paste → Import Extensions:
@@ -29,7 +27,9 @@ That's it. One-time action. Hayase auto-polls the manifest on every launch, so a
 https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json
 ```
 
-Settings → Extensions → paste. See the disclaimer at the top of this README.
+Settings → Extensions → paste.
+
+> **Shiru note:** a [Shiru](https://github.com/RockinChaos/Shiru) manifest is also published, but this has **not been tested in an actual Shiru install**. The code was designed against the lowest-common-denominator API both apps accept, so it should work. If you try it in Shiru and hit a problem, please [open an issue](https://github.com/anh9000/anitorrent/issues) with the details.
 
 ## Tested on
 
