@@ -1,13 +1,19 @@
-// src/yameii.js
-var NYAA_BASE = "https://nyaa.si";
-var UPLOADER = "Yameii";
-var ANIME_CATEGORY = "1_2";
+// src/lib/shared.js
 var TRACKERS = [
   "udp://tracker.opentrackr.org:1337/announce",
   "udp://open.stealth.si:80/announce",
   "udp://tracker.torrent.eu.org:451/announce",
   "udp://exodus.desync.com:6969/announce",
+  "udp://tracker.coppersurfer.tk:6969/announce",
+  "udp://tracker.openbittorrent.com:6969/announce",
   "http://nyaa.tracker.wf:7777/announce"
+];
+var BATCH_PATTERNS = [
+  /\bbatch\b/i,
+  /\bcomplete\b/i,
+  /\bseason\s*\d+\b/i,
+  /\bs\d{1,2}\b(?!\s*e\d)/i,
+  /\b\d{1,3}\s*[-~]\s*\d{1,3}\b/
 ];
 var STOPWORDS = /* @__PURE__ */ new Set([
   "the",
@@ -44,27 +50,15 @@ var STOPWORDS = /* @__PURE__ */ new Set([
   "ova",
   "special"
 ]);
-var BATCH_PATTERNS = [
-  /\bbatch\b/i,
-  /\bcomplete\b/i,
-  /\bseason\s*\d+\b/i,
-  /\bs\d{1,2}\b(?!\s*e\d)/i,
-  /\b\d{1,3}\s*[-~]\s*\d{1,3}\b/
-];
 function escapeQuery(str) {
   return String(str || "").replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 function significantTokens(title) {
   return escapeQuery(title).toLowerCase().split(/\s+/).filter((t) => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+(st|nd|rd|th)$/.test(t));
 }
-function trimTitleForQuery(title) {
-  const colon = title.indexOf(":");
-  const base = colon > 0 ? title.slice(0, colon) : title;
-  return significantTokens(base).slice(0, 4).join(" ") || escapeQuery(title);
-}
 function buildTitleTokens(titles) {
   const all = /* @__PURE__ */ new Set();
-  for (const t of titles) {
+  for (const t of titles || []) {
     for (const tok of significantTokens(t)) all.add(tok);
   }
   const arr = [...all];
@@ -73,11 +67,15 @@ function buildTitleTokens(titles) {
 function tokenInTitle(tok, lower) {
   return new RegExp("\\b" + tok + "\\b").test(lower);
 }
-function resultMatchesShow(title, tokens) {
+function resultMatchesShow(title, tokens, minHits = 1) {
   if (!tokens.size) return true;
-  const lower = title.toLowerCase();
+  const lower = String(title).toLowerCase();
+  let hits = 0;
   for (const tok of tokens) {
-    if (tokenInTitle(tok, lower)) return true;
+    if (tokenInTitle(tok, lower)) {
+      hits++;
+      if (hits >= minHits) return true;
+    }
   }
   return false;
 }
@@ -96,6 +94,22 @@ function looksLikeBatch(title) {
   if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false;
   return BATCH_PATTERNS.some((re) => re.test(title));
 }
+function trimTitleForQuery(title) {
+  const colon = title.indexOf(":");
+  const base = colon > 0 ? title.slice(0, colon) : title;
+  return significantTokens(base).slice(0, 4).join(" ") || escapeQuery(title);
+}
+function rankTitlesForQuery(titles) {
+  return (titles || []).map((t) => {
+    const stripped = String(t).replace(/\s/g, "");
+    const ascii = escapeQuery(t).replace(/\s/g, "");
+    return {
+      t,
+      tokens: significantTokens(t).length,
+      asciiRatio: stripped.length ? ascii.length / stripped.length : 0
+    };
+  }).filter((x) => x.tokens > 0).sort((a, b) => b.asciiRatio - a.asciiRatio || b.tokens - a.tokens).map((x) => x.t);
+}
 function matchesResolution(title, resolution) {
   if (!resolution) return true;
   return title.includes(resolution + "p") || title.includes(resolution);
@@ -108,7 +122,7 @@ function hitsExclusion(title, exclusions) {
 function buildMagnet(hash, name) {
   const trackers = TRACKERS.map((t) => "tr=" + encodeURIComponent(t)).join("&");
   const dn = name ? "&dn=" + encodeURIComponent(name) : "";
-  return "magnet:?xt=urn:btih:" + hash.toLowerCase() + dn + "&" + trackers;
+  return "magnet:?xt=urn:btih:" + String(hash).toLowerCase() + dn + "&" + trackers;
 }
 function parseSize(text) {
   if (!text) return 0;
@@ -155,6 +169,11 @@ function pickItems(xml) {
   }
   return out;
 }
+
+// src/yameii.js
+var NYAA_BASE = "https://nyaa.si";
+var UPLOADER = "Yameii";
+var ANIME_CATEGORY = "1_2";
 async function rssSearch(query) {
   const qs = "?u=" + encodeURIComponent(UPLOADER) + "&page=rss" + (query ? "&q=" + encodeURIComponent(query) : "") + "&c=" + ANIME_CATEGORY + "&s=id&o=desc";
   const url = NYAA_BASE + "/" + qs;
@@ -230,17 +249,6 @@ function rankResults(results, resolution) {
     if (dt !== 0) return dt;
     return b.seeders - a.seeders;
   });
-}
-function rankTitlesForQuery(titles) {
-  return titles.map((t) => {
-    const stripped = String(t).replace(/\s/g, "");
-    const ascii = escapeQuery(t).replace(/\s/g, "");
-    return {
-      t,
-      tokens: significantTokens(t).length,
-      asciiRatio: stripped.length ? ascii.length / stripped.length : 0
-    };
-  }).filter((x) => x.tokens > 0).sort((a, b) => b.asciiRatio - a.asciiRatio || b.tokens - a.tokens).map((x) => x.t);
 }
 function queryVariantsForTitle(title) {
   const base = trimTitleForQuery(title);

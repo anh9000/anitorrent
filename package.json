@@ -6,7 +6,8 @@
   "description": "Nyaa torrent search extension for Hayase and Shiru.",
   "scripts": {
     "build": "tsup",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "test": "node test/relevance.test.mjs"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",

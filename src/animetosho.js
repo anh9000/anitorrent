@@ -1,8 +1,18 @@
+import {
+  buildTitleTokens, resultMatchesShow, titleHasEpisode, looksLikeBatch,
+  trimTitleForQuery, rankTitlesForQuery, matchesResolution, hitsExclusion
+} from './lib/shared.js'
+
 const BASE = 'https://feed.animetosho.org/json'
 const MAPPING_URL = 'https://raw.githubusercontent.com/anh9000/anitorrent/main/data/anilist-to-anidb.json'
 
 let mappingCache = null
 let mappingPromise = null
+
+function validId (v) {
+  const n = Number(v)
+  return Number.isInteger(n) && n > 0
+}
 
 async function getMapping () {
   if (mappingCache) return mappingCache
@@ -28,118 +38,6 @@ async function resolveAnidbAid (query) {
   const map = await getMapping()
   const aid = map[String(query.anilistId)]
   return validId(aid) ? Number(aid) : null
-}
-
-const STOPWORDS = new Set([
-  'the', 'and', 'for', 'with', 'from', 'this', 'that', 'her', 'his',
-  'are', 'was', 'were', 'has', 'have', 'had', 'who', 'what', 'when',
-  'where', 'why', 'how', 'all', 'any', 'one', 'two', 'season',
-  'episode', 'part', 'arc', 'movie', 'film', 'ova', 'special'
-])
-
-function pad (n) {
-  const s = String(n)
-  return s.length < 2 ? '0' + s : s
-}
-
-function escapeQuery (str) {
-  return String(str || '').replace(/[^\w\s\-.]/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
-function significantTokens (title) {
-  return escapeQuery(title)
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(t => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+(st|nd|rd|th)$/.test(t))
-}
-
-function trimTitleForQuery (title) {
-  const colon = title.indexOf(':')
-  const base = colon > 0 ? title.slice(0, colon) : title
-  return significantTokens(base).slice(0, 4).join(' ') || escapeQuery(title)
-}
-
-function rankTitlesForQuery (titles) {
-  return titles
-    .map(t => {
-      const stripped = String(t).replace(/\s/g, '')
-      const ascii = escapeQuery(t).replace(/\s/g, '')
-      return {
-        t,
-        tokens: significantTokens(t).length,
-        asciiRatio: stripped.length ? ascii.length / stripped.length : 0
-      }
-    })
-    .filter(x => x.tokens > 0)
-    .sort((a, b) => (b.asciiRatio - a.asciiRatio) || (b.tokens - a.tokens))
-    .map(x => x.t)
-}
-
-function buildTitleTokens (titles) {
-  const all = new Set()
-  for (const t of titles) {
-    for (const tok of significantTokens(t)) all.add(tok)
-  }
-  const arr = [...all]
-  return new Set(arr.filter(tok => !arr.some(other => other !== tok && other.includes(tok))))
-}
-
-function tokenInTitle (tok, lower) {
-  return new RegExp('\\b' + tok + '\\b').test(lower)
-}
-
-function resultMatchesShow (title, tokens, minHits = 1) {
-  if (!tokens.size) return true
-  const lower = title.toLowerCase()
-  let hits = 0
-  for (const tok of tokens) {
-    if (tokenInTitle(tok, lower)) {
-      hits++
-      if (hits >= minHits) return true
-    }
-  }
-  return false
-}
-
-function validId (v) {
-  const n = Number(v)
-  return Number.isInteger(n) && n > 0
-}
-
-const BATCH_PATTERNS = [
-  /\bbatch\b/i,
-  /\bcomplete\b/i,
-  /\bseason\s*\d+\b/i,
-  /\bs\d{1,2}\b(?!\s*e\d)/i,
-  /\b\d{1,3}\s*[-~]\s*\d{1,3}\b/
-]
-
-function looksLikeBatch (title) {
-  if (/\bs\d{1,2}e\d{1,3}\b/i.test(title)) return false
-  if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false
-  return BATCH_PATTERNS.some(re => re.test(title))
-}
-
-function titleHasEpisode (title, ep) {
-  if (ep == null) return true
-  const n = String(ep).replace(/^0+/, '') || '0'
-  const patterns = [
-    new RegExp('\\b(?:e|ep|episode\\s*|s\\d{1,2}e)0*' + n + '\\b(?!\\d)', 'i'),
-    new RegExp('[\\s._][-~]\\s+0*' + n + '(?:v\\d)?(?=[\\s\\[\\(]|$)', 'i'),
-    new RegExp('[\\[\\(]0*' + n + '(?:v\\d)?[\\]\\)]', 'i')
-  ]
-  return patterns.some(re => re.test(title))
-}
-
-function hitsExclusion (title, exclusions) {
-  if (!exclusions || !exclusions.length) return false
-  const lower = title.toLowerCase()
-  return exclusions.some(kw => kw && lower.includes(String(kw).toLowerCase()))
-}
-
-function matchesResolution (title, resolution) {
-  if (!resolution) return true
-  return title.includes(resolution + 'p') || title.includes(resolution)
 }
 
 async function tryFetch (url) {

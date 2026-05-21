@@ -1,32 +1,11 @@
-// src/animetosho.js
-var BASE = "https://feed.animetosho.org/json";
-var MAPPING_URL = "https://raw.githubusercontent.com/anh9000/anitorrent/main/data/anilist-to-anidb.json";
-var mappingCache = null;
-var mappingPromise = null;
-async function getMapping() {
-  if (mappingCache) return mappingCache;
-  if (!mappingPromise) {
-    mappingPromise = (async () => {
-      try {
-        const r = await fetch(MAPPING_URL);
-        if (!r.ok) return {};
-        const data = await r.json();
-        mappingCache = data && typeof data === "object" ? data : {};
-        return mappingCache;
-      } catch {
-        return {};
-      }
-    })();
-  }
-  return mappingPromise;
-}
-async function resolveAnidbAid(query) {
-  if (validId(query.anidbAid)) return Number(query.anidbAid);
-  if (!validId(query.anilistId)) return null;
-  const map = await getMapping();
-  const aid = map[String(query.anilistId)];
-  return validId(aid) ? Number(aid) : null;
-}
+// src/lib/shared.js
+var BATCH_PATTERNS = [
+  /\bbatch\b/i,
+  /\bcomplete\b/i,
+  /\bseason\s*\d+\b/i,
+  /\bs\d{1,2}\b(?!\s*e\d)/i,
+  /\b\d{1,3}\s*[-~]\s*\d{1,3}\b/
+];
 var STOPWORDS = /* @__PURE__ */ new Set([
   "the",
   "and",
@@ -63,30 +42,14 @@ var STOPWORDS = /* @__PURE__ */ new Set([
   "special"
 ]);
 function escapeQuery(str) {
-  return String(str || "").replace(/[^\w\s\-.]/g, " ").replace(/\s+/g, " ").trim();
+  return String(str || "").replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 function significantTokens(title) {
   return escapeQuery(title).toLowerCase().split(/\s+/).filter((t) => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+(st|nd|rd|th)$/.test(t));
 }
-function trimTitleForQuery(title) {
-  const colon = title.indexOf(":");
-  const base = colon > 0 ? title.slice(0, colon) : title;
-  return significantTokens(base).slice(0, 4).join(" ") || escapeQuery(title);
-}
-function rankTitlesForQuery(titles) {
-  return titles.map((t) => {
-    const stripped = String(t).replace(/\s/g, "");
-    const ascii = escapeQuery(t).replace(/\s/g, "");
-    return {
-      t,
-      tokens: significantTokens(t).length,
-      asciiRatio: stripped.length ? ascii.length / stripped.length : 0
-    };
-  }).filter((x) => x.tokens > 0).sort((a, b) => b.asciiRatio - a.asciiRatio || b.tokens - a.tokens).map((x) => x.t);
-}
 function buildTitleTokens(titles) {
   const all = /* @__PURE__ */ new Set();
-  for (const t of titles) {
+  for (const t of titles || []) {
     for (const tok of significantTokens(t)) all.add(tok);
   }
   const arr = [...all];
@@ -97,7 +60,7 @@ function tokenInTitle(tok, lower) {
 }
 function resultMatchesShow(title, tokens, minHits = 1) {
   if (!tokens.size) return true;
-  const lower = title.toLowerCase();
+  const lower = String(title).toLowerCase();
   let hits = 0;
   for (const tok of tokens) {
     if (tokenInTitle(tok, lower)) {
@@ -106,22 +69,6 @@ function resultMatchesShow(title, tokens, minHits = 1) {
     }
   }
   return false;
-}
-function validId(v) {
-  const n = Number(v);
-  return Number.isInteger(n) && n > 0;
-}
-var BATCH_PATTERNS = [
-  /\bbatch\b/i,
-  /\bcomplete\b/i,
-  /\bseason\s*\d+\b/i,
-  /\bs\d{1,2}\b(?!\s*e\d)/i,
-  /\b\d{1,3}\s*[-~]\s*\d{1,3}\b/
-];
-function looksLikeBatch(title) {
-  if (/\bs\d{1,2}e\d{1,3}\b/i.test(title)) return false;
-  if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false;
-  return BATCH_PATTERNS.some((re) => re.test(title));
 }
 function titleHasEpisode(title, ep) {
   if (ep == null) return true;
@@ -133,14 +80,69 @@ function titleHasEpisode(title, ep) {
   ];
   return patterns.some((re) => re.test(title));
 }
+function looksLikeBatch(title) {
+  if (/\bs\d{1,2}e\d{1,3}\b/i.test(title)) return false;
+  if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false;
+  return BATCH_PATTERNS.some((re) => re.test(title));
+}
+function trimTitleForQuery(title) {
+  const colon = title.indexOf(":");
+  const base = colon > 0 ? title.slice(0, colon) : title;
+  return significantTokens(base).slice(0, 4).join(" ") || escapeQuery(title);
+}
+function rankTitlesForQuery(titles) {
+  return (titles || []).map((t) => {
+    const stripped = String(t).replace(/\s/g, "");
+    const ascii = escapeQuery(t).replace(/\s/g, "");
+    return {
+      t,
+      tokens: significantTokens(t).length,
+      asciiRatio: stripped.length ? ascii.length / stripped.length : 0
+    };
+  }).filter((x) => x.tokens > 0).sort((a, b) => b.asciiRatio - a.asciiRatio || b.tokens - a.tokens).map((x) => x.t);
+}
+function matchesResolution(title, resolution) {
+  if (!resolution) return true;
+  return title.includes(resolution + "p") || title.includes(resolution);
+}
 function hitsExclusion(title, exclusions) {
   if (!exclusions || !exclusions.length) return false;
   const lower = title.toLowerCase();
   return exclusions.some((kw) => kw && lower.includes(String(kw).toLowerCase()));
 }
-function matchesResolution(title, resolution) {
-  if (!resolution) return true;
-  return title.includes(resolution + "p") || title.includes(resolution);
+
+// src/animetosho.js
+var BASE = "https://feed.animetosho.org/json";
+var MAPPING_URL = "https://raw.githubusercontent.com/anh9000/anitorrent/main/data/anilist-to-anidb.json";
+var mappingCache = null;
+var mappingPromise = null;
+function validId(v) {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0;
+}
+async function getMapping() {
+  if (mappingCache) return mappingCache;
+  if (!mappingPromise) {
+    mappingPromise = (async () => {
+      try {
+        const r = await fetch(MAPPING_URL);
+        if (!r.ok) return {};
+        const data = await r.json();
+        mappingCache = data && typeof data === "object" ? data : {};
+        return mappingCache;
+      } catch {
+        return {};
+      }
+    })();
+  }
+  return mappingPromise;
+}
+async function resolveAnidbAid(query) {
+  if (validId(query.anidbAid)) return Number(query.anidbAid);
+  if (!validId(query.anilistId)) return null;
+  const map = await getMapping();
+  const aid = map[String(query.anilistId)];
+  return validId(aid) ? Number(aid) : null;
 }
 async function tryFetch(url) {
   let res;

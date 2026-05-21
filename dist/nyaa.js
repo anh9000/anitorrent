@@ -1,6 +1,4 @@
-// src/nyaa.js
-var NYAA_BASE = "https://nyaa.si";
-var ANIME_CATEGORY = "1_2";
+// src/lib/shared.js
 var TRACKERS = [
   "udp://tracker.opentrackr.org:1337/announce",
   "udp://open.stealth.si:80/announce",
@@ -60,7 +58,7 @@ function significantTokens(title) {
 }
 function buildTitleTokens(titles) {
   const all = /* @__PURE__ */ new Set();
-  for (const t of titles) {
+  for (const t of titles || []) {
     for (const tok of significantTokens(t)) all.add(tok);
   }
   const arr = [...all];
@@ -69,11 +67,15 @@ function buildTitleTokens(titles) {
 function tokenInTitle(tok, lower) {
   return new RegExp("\\b" + tok + "\\b").test(lower);
 }
-function resultMatchesShow(resultTitle, tokens) {
+function resultMatchesShow(title, tokens, minHits = 1) {
   if (!tokens.size) return true;
-  const lower = resultTitle.toLowerCase();
+  const lower = String(title).toLowerCase();
+  let hits = 0;
   for (const tok of tokens) {
-    if (tokenInTitle(tok, lower)) return true;
+    if (tokenInTitle(tok, lower)) {
+      hits++;
+      if (hits >= minHits) return true;
+    }
   }
   return false;
 }
@@ -87,13 +89,18 @@ function titleHasEpisode(title, ep) {
   ];
   return patterns.some((re) => re.test(title));
 }
+function looksLikeBatch(title) {
+  if (/\bs\d{1,2}e\d{1,3}\b/i.test(title)) return false;
+  if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false;
+  return BATCH_PATTERNS.some((re) => re.test(title));
+}
 function trimTitleForQuery(title) {
   const colon = title.indexOf(":");
   const base = colon > 0 ? title.slice(0, colon) : title;
   return significantTokens(base).slice(0, 4).join(" ") || escapeQuery(title);
 }
 function rankTitlesForQuery(titles) {
-  return titles.map((t) => {
+  return (titles || []).map((t) => {
     const stripped = String(t).replace(/\s/g, "");
     const ascii = escapeQuery(t).replace(/\s/g, "");
     return {
@@ -107,10 +114,19 @@ function pad(n) {
   const s = String(n);
   return s.length < 2 ? "0" + s : s;
 }
+function matchesResolution(title, resolution) {
+  if (!resolution) return true;
+  return title.includes(resolution + "p") || title.includes(resolution);
+}
+function hitsExclusion(title, exclusions) {
+  if (!exclusions || !exclusions.length) return false;
+  const lower = title.toLowerCase();
+  return exclusions.some((kw) => kw && lower.includes(String(kw).toLowerCase()));
+}
 function buildMagnet(hash, name) {
   const trackers = TRACKERS.map((t) => "tr=" + encodeURIComponent(t)).join("&");
   const dn = name ? "&dn=" + encodeURIComponent(name) : "";
-  return "magnet:?xt=urn:btih:" + hash.toLowerCase() + dn + "&" + trackers;
+  return "magnet:?xt=urn:btih:" + String(hash).toLowerCase() + dn + "&" + trackers;
 }
 function parseSize(text) {
   if (!text) return 0;
@@ -157,20 +173,10 @@ function pickItems(xml) {
   }
   return out;
 }
-function looksLikeBatch(title) {
-  if (/\bs\d{1,2}e\d{1,3}\b/i.test(title)) return false;
-  if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false;
-  return BATCH_PATTERNS.some((re) => re.test(title));
-}
-function matchesResolution(title, resolution) {
-  if (!resolution) return true;
-  return title.includes(resolution + "p") || title.includes(resolution);
-}
-function hitsExclusion(title, exclusions) {
-  if (!exclusions || !exclusions.length) return false;
-  const lower = title.toLowerCase();
-  return exclusions.some((kw) => kw && lower.includes(String(kw).toLowerCase()));
-}
+
+// src/nyaa.js
+var NYAA_BASE = "https://nyaa.si";
+var ANIME_CATEGORY = "1_2";
 async function rssSearch(query) {
   const url = NYAA_BASE + "/?page=rss&q=" + encodeURIComponent(query) + "&c=" + ANIME_CATEGORY + "&s=id&o=desc";
   let res;

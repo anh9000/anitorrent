@@ -1,17 +1,21 @@
-// src/seadex.js
-var BASE = "https://releases.moe/api/collections/entries/records";
+// src/lib/shared.js
 var TRACKERS = [
   "udp://tracker.opentrackr.org:1337/announce",
   "udp://open.stealth.si:80/announce",
   "udp://tracker.torrent.eu.org:451/announce",
   "udp://exodus.desync.com:6969/announce",
+  "udp://tracker.coppersurfer.tk:6969/announce",
+  "udp://tracker.openbittorrent.com:6969/announce",
   "http://nyaa.tracker.wf:7777/announce"
 ];
 function buildMagnet(hash, name) {
   const trackers = TRACKERS.map((t) => "tr=" + encodeURIComponent(t)).join("&");
   const dn = name ? "&dn=" + encodeURIComponent(name) : "";
-  return "magnet:?xt=urn:btih:" + hash.toLowerCase() + dn + "&" + trackers;
+  return "magnet:?xt=urn:btih:" + String(hash).toLowerCase() + dn + "&" + trackers;
 }
+
+// src/seadex.js
+var BASE = "https://releases.moe/api/collections/entries/records";
 function totalSize(files) {
   if (!Array.isArray(files)) return 0;
   let s = 0;
