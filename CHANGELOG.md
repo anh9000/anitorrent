@@ -4,6 +4,18 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.0] - 2026-05-20 (stable)
+
+### Changed
+
+- **All matching logic consolidated into one shared module** (`src/lib/shared.js`). Every source now imports the same query-building, show-matching, episode-detection, and batch-detection code instead of each carrying its own copy. This is a maintainability and correctness change: a fix to relevance logic now applies to all sources at once, and the sources can no longer drift out of sync (the root cause of several past bugs where a fix landed in some sources but not others). Behavior for end users is unchanged except for two consistency improvements below. All six per-source bundles remain standalone (the shared module is inlined at build time).
+- **AnimeTosho and SubsPlease now strip hyphens from search queries** like the nyaa-based sources already did, so hyphenated titles search correctly there too.
+- **Seadex magnets now carry the full 7-tracker list** (was 5), matching the other sources for better peer discovery.
+
+### Added
+
+- **Committed relevance test suite** (`test/relevance.test.mjs`, run via `npm test`). Runs a spread of anime with realistic full AniList title sets (native + foreign synonyms, native-first to stress title selection) and asserts non-zero results with zero off-show contamination. This catches the class of regressions that previously only surfaced in production.
+
 ## [1.5.6] - 2026-05-20 (stable)
 
 ### Fixed
@@ -183,6 +195,7 @@ All six sources declare `manifestVersion: 2`, `media: "both"`, `languages: ["ALL
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.6.0]: https://github.com/anh9000/anitorrent/releases/tag/v1.6.0
 [1.5.6]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.6
 [1.5.5]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.5
 [1.5.4]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.4

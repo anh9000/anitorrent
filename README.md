@@ -121,9 +121,10 @@ The mapping is regenerated weekly by `.github/workflows/mappings.yml` running `.
 ```
 npm install
 npm run build
+npm test
 ```
 
-Output: `dist/*.js`. CI rebuilds on every push that touches `src/`, `package.json`, or `tsup.config.js`.
+`src/lib/shared.js` holds all the matching/query logic shared by every source (single source of truth). Each source in `src/` imports from it and is bundled into a standalone `dist/*.js` by tsup. CI rebuilds `dist/` on every push that touches `src/`, `package.json`, or `tsup.config.js`. `npm test` runs the relevance suite in `test/` against live nyaa.si.
 
 ## Changelog
 
