@@ -6,15 +6,25 @@ Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-lev
 
 ## [1.6.0] - 2026-05-20 (stable)
 
+### The problem this release fixes
+
+Across v1.5.x a series of search bugs kept recurring: shows with non-English titles returning zero results, unrelated shows leaking into results, single episodes being mislabeled as batches, and wrong-season cross-matches. Each was patched, but they kept coming back in slightly different forms. The root cause was structural: the matching logic (how a torrent title is judged to belong to the searched show) was **copy-pasted into all six source files**. Every fix had to be made in six places, and in practice a fix would land in some sources but not others, or the copies would drift out of sync. That drift is what reintroduced the bugs.
+
 ### Changed
 
-- **All matching logic consolidated into one shared module** (`src/lib/shared.js`). Every source now imports the same query-building, show-matching, episode-detection, and batch-detection code instead of each carrying its own copy. This is a maintainability and correctness change: a fix to relevance logic now applies to all sources at once, and the sources can no longer drift out of sync (the root cause of several past bugs where a fix landed in some sources but not others). Behavior for end users is unchanged except for two consistency improvements below. All six per-source bundles remain standalone (the shared module is inlined at build time).
-- **AnimeTosho and SubsPlease now strip hyphens from search queries** like the nyaa-based sources already did, so hyphenated titles search correctly there too.
+- **All matching logic consolidated into one shared module** (`src/lib/shared.js`). Every source now imports the same code for query building, show-name matching, episode detection, and batch detection. There is now exactly one copy. A fix applies to all sources at once and they can no longer drift apart. This removed roughly 400 lines of duplicated code. All six per-source bundles stay standalone (the shared module is inlined into each at build time, so Hayase still loads single self-contained files).
+- **Folded in every individual matching fix from v1.5.x as the single canonical implementation**, so the following are now guaranteed consistent across all six sources rather than present in some and missing in others:
+  - Title selection prefers the English/romaji titles instead of the shortest title (which was often the Japanese native or a foreign synonym that searched for nothing). This is what made shows like Witch Hat Atelier return zero results.
+  - Show-name matching is word-boundary based, not substring, so "dan" no longer matches "Danganronpa".
+  - Fragment tokens contained inside a longer title token are dropped ("dan" removed when "dandadan" is present).
+  - Ordinal season tokens (1st, 2nd, 3rd, 4th) are ignored, so a "4th Season" show no longer cross-matches other "4th Season" shows.
+  - Batch detection ignores titles carrying a specific single-episode marker (SxxExx or "- NN"), so single episodes are no longer tagged as batches.
+- **AnimeTosho and SubsPlease now strip hyphens from search queries** like the nyaa-based sources already did, so hyphenated titles search correctly on those sources too (previously they did not, because their copy of the query builder predated that fix).
 - **Seadex magnets now carry the full 7-tracker list** (was 5), matching the other sources for better peer discovery.
 
 ### Added
 
-- **Committed relevance test suite** (`test/relevance.test.mjs`, run via `npm test`). Runs a spread of anime with realistic full AniList title sets (native + foreign synonyms, native-first to stress title selection) and asserts non-zero results with zero off-show contamination. This catches the class of regressions that previously only surfaced in production.
+- **Committed relevance test suite** (`test/relevance.test.mjs`, run via `npm test`). Runs 15 diverse anime with their real, full AniList title sets (native title + foreign-language synonyms, ordered native-first to stress the title-selection path) against the live source, and asserts each returns non-zero results with zero off-show contamination. Coverage spans sequels, currently-airing weeklies, long-running shows, single-word titles, and heavily-foreign-titled shows (Witch Hat Atelier, Frieren, One Piece, Re:Zero S4, LIAR GAME, Dandadan, Bleach TYBW, Apothecary Diaries, Jujutsu Kaisen, Demon Slayer, Attack on Titan, Chainsaw Man, Mushoku Tensei, Solo Leveling, Kaiju No. 8). This is the regression gate that catches the title/relevance class of bugs before a release ships, instead of in production. All 15 pass on this release.
 
 ## [1.5.6] - 2026-05-20 (stable)
 
