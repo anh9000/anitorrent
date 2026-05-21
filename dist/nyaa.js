@@ -48,7 +48,30 @@ var STOPWORDS = /* @__PURE__ */ new Set([
   "movie",
   "film",
   "ova",
-  "special"
+  "special",
+  // Japanese romanization noise: grammatical particles, pronouns, honorifics,
+  // copula, common verbs, and arc/chapter markers that romanize to short tokens
+  // and appear across unrelated shows ("-hen" arc suffix, "na Ken", "boku/ore"
+  // pronouns, "-sama/-san/-kun/-chan" honorifics). Never show-identifying.
+  "hen",
+  "boku",
+  "ore",
+  "kimi",
+  "sama",
+  "san",
+  "kun",
+  "chan",
+  "suru",
+  "naru",
+  "nani",
+  "desu",
+  "dake",
+  "made",
+  "demo",
+  "inai",
+  "koi",
+  "ken",
+  "shi"
 ]);
 function escapeQuery(str) {
   return String(str || "").replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -57,19 +80,21 @@ function significantTokens(title) {
   return escapeQuery(title).toLowerCase().split(/\s+/).filter((t) => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+(st|nd|rd|th)$/.test(t));
 }
 function buildTitleTokens(titles) {
-  const all = /* @__PURE__ */ new Set();
+  const tokens = /* @__PURE__ */ new Set();
   for (const t of titles || []) {
-    for (const tok of significantTokens(t)) all.add(tok);
+    for (const tok of significantTokens(t)) tokens.add(tok);
   }
-  const arr = [...all];
-  return new Set(arr.filter((tok) => !arr.some((other) => other !== tok && other.includes(tok))));
+  return tokens;
 }
 function tokenInTitle(tok, lower) {
   return new RegExp("\\b" + tok + "\\b").test(lower);
 }
+function stripLangCodes(title) {
+  return String(title).replace(/\[[A-Z]{2,3}(?:-[A-Z]{2,3})?\]/g, " ");
+}
 function resultMatchesShow(title, tokens, minHits = 1) {
   if (!tokens.size) return true;
-  const lower = String(title).toLowerCase();
+  const lower = stripLangCodes(title).toLowerCase();
   let hits = 0;
   for (const tok of tokens) {
     if (tokenInTitle(tok, lower)) {
@@ -100,15 +125,30 @@ function trimTitleForQuery(title) {
   return significantTokens(base).slice(0, 4).join(" ") || escapeQuery(title);
 }
 function rankTitlesForQuery(titles) {
-  return (titles || []).map((t) => {
+  const list = (titles || []).map((t) => {
     const stripped = String(t).replace(/\s/g, "");
     const ascii = escapeQuery(t).replace(/\s/g, "");
+    const toks = significantTokens(t);
+    const maxTok = toks.reduce((m, s) => Math.max(m, s.length), 0);
     return {
       t,
-      tokens: significantTokens(t).length,
+      tokens: toks.length,
+      maxTok,
+      signature: maxTok >= 4 ? toks.find((s) => s.length === maxTok) : "",
+      despaced: escapeQuery(t).toLowerCase().replace(/\s/g, ""),
       asciiRatio: stripped.length ? ascii.length / stripped.length : 0
     };
-  }).filter((x) => x.tokens > 0).sort((a, b) => b.asciiRatio - a.asciiRatio || b.tokens - a.tokens).map((x) => x.t);
+  }).filter((x) => x.tokens > 0);
+  for (const x of list) {
+    x.recur = x.signature ? list.reduce((n, y) => {
+      if (y === x || !y.signature) return n;
+      const related = y.despaced.includes(x.signature) || x.despaced.includes(y.signature);
+      return n + (related ? 1 : 0);
+    }, 0) : 0;
+  }
+  const latin = list.filter((x) => x.asciiRatio >= 0.5);
+  const pool = latin.length ? latin : list;
+  return pool.sort((a, b) => (b.recur > 0) - (a.recur > 0) || b.maxTok - a.maxTok || b.tokens - a.tokens || b.asciiRatio - a.asciiRatio).map((x) => x.t);
 }
 function pad(n) {
   const s = String(n);

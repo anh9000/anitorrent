@@ -23,7 +23,13 @@ export const STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'from', 'this', 'that', 'her', 'his',
   'are', 'was', 'were', 'has', 'have', 'had', 'who', 'what', 'when',
   'where', 'why', 'how', 'all', 'any', 'one', 'two', 'season',
-  'episode', 'part', 'arc', 'movie', 'film', 'ova', 'special'
+  'episode', 'part', 'arc', 'movie', 'film', 'ova', 'special',
+  // Japanese romanization noise: grammatical particles, pronouns, honorifics,
+  // copula, common verbs, and arc/chapter markers that romanize to short tokens
+  // and appear across unrelated shows ("-hen" arc suffix, "na Ken", "boku/ore"
+  // pronouns, "-sama/-san/-kun/-chan" honorifics). Never show-identifying.
+  'hen', 'boku', 'ore', 'kimi', 'sama', 'san', 'kun', 'chan', 'suru',
+  'naru', 'nani', 'desu', 'dake', 'made', 'demo', 'inai', 'koi', 'ken', 'shi'
 ])
 
 export function escapeQuery (str) {
@@ -38,21 +44,33 @@ export function significantTokens (title) {
 }
 
 export function buildTitleTokens (titles) {
-  const all = new Set()
+  // Word-boundary matching (tokenInTitle) already prevents fragment tokens like
+  // "dan" from matching inside unrelated words like "danganronpa", so no
+  // substring de-duplication is needed (and de-duping wrongly dropped real
+  // words like "toxin" inside the concatenated synonym "marriagetoxin").
+  const tokens = new Set()
   for (const t of titles || []) {
-    for (const tok of significantTokens(t)) all.add(tok)
+    for (const tok of significantTokens(t)) tokens.add(tok)
   }
-  const arr = [...all]
-  return new Set(arr.filter(tok => !arr.some(other => other !== tok && other.includes(tok))))
+  return tokens
 }
 
 export function tokenInTitle (tok, lower) {
   return new RegExp('\\b' + tok + '\\b').test(lower)
 }
 
+export function stripLangCodes (title) {
+  // Multi-sub release groups (Erai-raws etc.) append a long run of bracketed
+  // language/region codes: [ENG][POR-BR][SPA-LA][DAN][CHI]... These are file
+  // metadata, not part of the show name, yet "[DAN]" matches the token "dan"
+  // (from "DAN DA DAN") via word boundaries and pulled Ranma/Ao no Hako into
+  // Dandadan results. Strip all-caps 2-3 letter bracket codes before matching.
+  return String(title).replace(/\[[A-Z]{2,3}(?:-[A-Z]{2,3})?\]/g, ' ')
+}
+
 export function resultMatchesShow (title, tokens, minHits = 1) {
   if (!tokens.size) return true
-  const lower = String(title).toLowerCase()
+  const lower = stripLangCodes(title).toLowerCase()
   let hits = 0
   for (const tok of tokens) {
     if (tokenInTitle(tok, lower)) {
@@ -87,18 +105,65 @@ export function trimTitleForQuery (title) {
 }
 
 export function rankTitlesForQuery (titles) {
-  return (titles || [])
+  const list = (titles || [])
     .map(t => {
       const stripped = String(t).replace(/\s/g, '')
       const ascii = escapeQuery(t).replace(/\s/g, '')
+      const toks = significantTokens(t)
+      const maxTok = toks.reduce((m, s) => Math.max(m, s.length), 0)
       return {
         t,
-        tokens: significantTokens(t).length,
+        tokens: toks.length,
+        maxTok,
+        signature: maxTok >= 4 ? toks.find(s => s.length === maxTok) : '',
+        despaced: escapeQuery(t).toLowerCase().replace(/\s/g, ''),
         asciiRatio: stripped.length ? ascii.length / stripped.length : 0
       }
     })
     .filter(x => x.tokens > 0)
-    .sort((a, b) => (b.asciiRatio - a.asciiRatio) || (b.tokens - a.tokens))
+
+  // Cross-title recurrence: how many of the show's OTHER titles contain this
+  // title's signature (longest) token, as a substring so it survives spacing
+  // and romanization differences (kaiju in kaijuu in 8kaijuu, monogatari in
+  // bakemonogatari). A canonical name's signature recurs across romaji /
+  // english / transliterations; a one-off descriptive synonym ("Monster #8",
+  // "Monster Tale", "Stray God", "Tiger X Dragon", "HxH") matches nothing else.
+  // That recurrence is what reliably separates the real title from loose
+  // synonyms, which when chosen as the search query drag in unrelated shows
+  // that then slip past token matching. Picking by longest token alone fails
+  // ("Monster #8" has a longer token than "Kaiju No. 8" yet is the wrong query).
+  for (const x of list) {
+    x.recur = x.signature
+      ? list.reduce((n, y) => {
+        if (y === x || !y.signature) return n
+        // bidirectional: relate if either signature contains the other, so the
+        // pair is credited symmetrically and the maxTok tiebreaker then picks
+        // the longer, more specific name (bakemonogatari over monogatari).
+        const related = y.despaced.includes(x.signature) || x.despaced.includes(y.signature)
+        return n + (related ? 1 : 0)
+      }, 0)
+      : 0
+  }
+
+  // Prefer mostly-Latin titles (romaji/english) over heavily transliterated
+  // foreign synonyms. If every title is foreign, keep them all as a fallback so
+  // the show still searches something (never return zero -> Witch Hat bug).
+  const latin = list.filter(x => x.asciiRatio >= 0.5)
+  const pool = latin.length ? latin : list
+  // Recurrence is a boolean GATE, not a weighted count: counting biases toward
+  // short generic tokens ("level", "monster") because a shorter token is a
+  // substring of more titles, which is exactly the wrong title to query. So we
+  // only ask "does this title's signature recur at all", then pick the LONGEST
+  // signature among those that do (bakemonogatari over monogatari, solo
+  // leveling over the bare "level" of "Ore dake Level Up na Ken"). Shows whose
+  // titles share nothing (Noragami, Toradora) have no recurrence and fall back
+  // to longest-token, which is still the canonical name over a short synonym.
+  return pool
+    .sort((a, b) =>
+      ((b.recur > 0) - (a.recur > 0)) ||
+      (b.maxTok - a.maxTok) ||
+      (b.tokens - a.tokens) ||
+      (b.asciiRatio - a.asciiRatio))
     .map(x => x.t)
 }
 
