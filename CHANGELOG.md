@@ -4,6 +4,17 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.5.6] - 2026-05-20 (stable)
+
+### Fixed
+
+- **Zero results for shows with non-English titles** (`nyaa 1.0.11`, `animetosho 1.0.6`, `yameii 1.0.8`, `toonshub 1.0.5`, `subsplease 1.0.4`). The query builder picked the two shortest titles AniList provides. For many shows the shortest titles are the Japanese native title and short foreign synonyms (Vietnamese, Thai, etc.), which strip down to nothing usable, so the actual English and romaji titles were never searched. Witch Hat Atelier returned nothing despite nyaa.si being full of episodes. The builder now ranks titles by how much survives as searchable Latin text and prefers the English/romaji titles, skipping titles that produce no usable search terms.
+- **Unrelated shows leaking into results via partial-word matches**. Show-name matching used substring checks, so the token "dan" (from "DAN DA DAN") matched "Danganronpa". Matching is now word-boundary based, and fragment tokens that are contained inside a longer title token are dropped (so "dan" is removed when "dandadan" is present). Stress-tested across 10 diverse anime including sequels, movies, and foreign-titled shows.
+
+### Known limitation
+
+- Shows whose only distinctive English word is very short and common (for example "Oshi no Ko", whose lone usable token is "oshi") can still surface the occasional unrelated release that happens to contain that word. Tightening this further would risk dropping legitimate releases, so it is left as-is.
+
 ## [1.5.5] - 2026-05-20 (stable)
 
 ### Fixed
@@ -172,6 +183,7 @@ All six sources declare `manifestVersion: 2`, `media: "both"`, `languages: ["ALL
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.5.6]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.6
 [1.5.5]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.5
 [1.5.4]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.4
 [1.5.3]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.3
