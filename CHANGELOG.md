@@ -4,6 +4,13 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.5.5] - 2026-05-20 (stable)
+
+### Fixed
+
+- **Single episodes wrongly tagged as batches** (`nyaa 1.0.10`, `animetosho 1.0.5`, `yameii 1.0.7`, `toonshub 1.0.4`). The batch detector matched the bare phrase "Season N" in a title. Shows whose official name contains the season (e.g. "Re:Zero ... Season 4") had every single episode flagged as a batch, flooding batch-mode search results with individual episodes. Batch detection now ignores any title that carries a specific single-episode marker (`SxxExx` or `- NN`), so only real season packs and complete-batch releases are tagged.
+- **Cross-show contamination from ordinal season tokens** (`nyaa 1.0.10`, `animetosho 1.0.5`, `yameii 1.0.7`, `toonshub 1.0.4`, `subsplease 1.0.3`). The title tokenizer treated ordinals like "4th" as show-identifying words. A search for a "4th Season" show (Re:Zero) would match unrelated "4th Season" shows (That Time I Got Reincarnated as a Slime), surfacing the wrong series in results. Ordinal tokens (`1st`, `2nd`, `3rd`, `4th`, etc.) are now dropped from match tokens.
+
 ## [1.5.4] - 2026-05-18 (stable)
 
 Marks the first stable, audited release. Full code audit done across all six sources, manifests, build pipeline, mapping pipeline, and CI workflows. One bug found and fixed (below). Comprehensive smoke test run across six shows × six sources, zero garbage results, zero unexpected failures.
@@ -165,6 +172,7 @@ All six sources declare `manifestVersion: 2`, `media: "both"`, `languages: ["ALL
 - Dual-manifest layout: `hayase/index.json` declares `manifestVersion: 2` for Hayase; `shiru/index.json` uses the Shiru manifest format. One shared `dist/nyaa.js` works in both apps.
 - GitHub Actions workflow rebuilds `dist/` automatically on every push that touches `src/`, `package.json`, or `tsup.config.js`.
 
+[1.5.5]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.5
 [1.5.4]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.4
 [1.5.3]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.3
 [1.5.2]: https://github.com/anh9000/anitorrent/releases/tag/v1.5.2
