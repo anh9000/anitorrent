@@ -17,7 +17,7 @@ function significantTokens (title) {
   return escapeQuery(title)
     .toLowerCase()
     .split(/\s+/)
-    .filter(t => t.length >= 3 && !STOPWORDS.has(t))
+    .filter(t => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+(st|nd|rd|th)$/.test(t))
 }
 
 function trimTitleForQuery (title) {

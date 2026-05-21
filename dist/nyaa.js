@@ -56,7 +56,7 @@ function escapeQuery(str) {
   return String(str || "").replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 function significantTokens(title) {
-  return escapeQuery(title).toLowerCase().split(/\s+/).filter((t) => t.length >= 3 && !STOPWORDS.has(t));
+  return escapeQuery(title).toLowerCase().split(/\s+/).filter((t) => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+(st|nd|rd|th)$/.test(t));
 }
 function buildTitleTokens(titles) {
   const tokens = /* @__PURE__ */ new Set();
@@ -146,6 +146,8 @@ function pickItems(xml) {
   return out;
 }
 function looksLikeBatch(title) {
+  if (/\bs\d{1,2}e\d{1,3}\b/i.test(title)) return false;
+  if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false;
   return BATCH_PATTERNS.some((re) => re.test(title));
 }
 function matchesResolution(title, resolution) {
