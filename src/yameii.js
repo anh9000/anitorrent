@@ -43,18 +43,23 @@ function trimTitleForQuery (title) {
 }
 
 function buildTitleTokens (titles) {
-  const tokens = new Set()
+  const all = new Set()
   for (const t of titles) {
-    for (const tok of significantTokens(t)) tokens.add(tok)
+    for (const tok of significantTokens(t)) all.add(tok)
   }
-  return tokens
+  const arr = [...all]
+  return new Set(arr.filter(tok => !arr.some(other => other !== tok && other.includes(tok))))
+}
+
+function tokenInTitle (tok, lower) {
+  return new RegExp('\\b' + tok + '\\b').test(lower)
 }
 
 function resultMatchesShow (title, tokens) {
   if (!tokens.size) return true
   const lower = title.toLowerCase()
   for (const tok of tokens) {
-    if (lower.includes(tok)) return true
+    if (tokenInTitle(tok, lower)) return true
   }
   return false
 }
@@ -229,8 +234,20 @@ function rankResults (results, resolution) {
   })
 }
 
-function titlesByLengthAsc (titles) {
-  return [...titles].sort((a, b) => a.length - b.length)
+function rankTitlesForQuery (titles) {
+  return titles
+    .map(t => {
+      const stripped = String(t).replace(/\s/g, '')
+      const ascii = escapeQuery(t).replace(/\s/g, '')
+      return {
+        t,
+        tokens: significantTokens(t).length,
+        asciiRatio: stripped.length ? ascii.length / stripped.length : 0
+      }
+    })
+    .filter(x => x.tokens > 0)
+    .sort((a, b) => (b.asciiRatio - a.asciiRatio) || (b.tokens - a.tokens))
+    .map(x => x.t)
 }
 
 function queryVariantsForTitle (title) {
@@ -248,7 +265,7 @@ async function runSearch (query, opts) {
   const seen = new Set()
   const results = []
 
-  const titles = titlesByLengthAsc(query.titles).slice(0, 2)
+  const titles = rankTitlesForQuery(query.titles).slice(0, 2)
   for (const title of titles) {
     const variants = queryVariantsForTitle(title)
     for (const q of variants) {

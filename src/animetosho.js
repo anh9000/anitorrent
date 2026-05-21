@@ -59,12 +59,33 @@ function trimTitleForQuery (title) {
   return significantTokens(base).slice(0, 4).join(' ') || escapeQuery(title)
 }
 
+function rankTitlesForQuery (titles) {
+  return titles
+    .map(t => {
+      const stripped = String(t).replace(/\s/g, '')
+      const ascii = escapeQuery(t).replace(/\s/g, '')
+      return {
+        t,
+        tokens: significantTokens(t).length,
+        asciiRatio: stripped.length ? ascii.length / stripped.length : 0
+      }
+    })
+    .filter(x => x.tokens > 0)
+    .sort((a, b) => (b.asciiRatio - a.asciiRatio) || (b.tokens - a.tokens))
+    .map(x => x.t)
+}
+
 function buildTitleTokens (titles) {
-  const tokens = new Set()
+  const all = new Set()
   for (const t of titles) {
-    for (const tok of significantTokens(t)) tokens.add(tok)
+    for (const tok of significantTokens(t)) all.add(tok)
   }
-  return tokens
+  const arr = [...all]
+  return new Set(arr.filter(tok => !arr.some(other => other !== tok && other.includes(tok))))
+}
+
+function tokenInTitle (tok, lower) {
+  return new RegExp('\\b' + tok + '\\b').test(lower)
 }
 
 function resultMatchesShow (title, tokens, minHits = 1) {
@@ -72,7 +93,7 @@ function resultMatchesShow (title, tokens, minHits = 1) {
   const lower = title.toLowerCase()
   let hits = 0
   for (const tok of tokens) {
-    if (lower.includes(tok)) {
+    if (tokenInTitle(tok, lower)) {
       hits++
       if (hits >= minHits) return true
     }
@@ -193,7 +214,7 @@ async function fetchByAid (aid) {
 
 async function fetchByText (titles) {
   const seen = new Map()
-  const ordered = [...titles].sort((a, b) => a.length - b.length).slice(0, 3)
+  const ordered = rankTitlesForQuery(titles).slice(0, 3)
   for (const title of ordered) {
     const q = trimTitleForQuery(title)
     if (!q) continue

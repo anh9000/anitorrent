@@ -59,17 +59,21 @@ function significantTokens(title) {
   return escapeQuery(title).toLowerCase().split(/\s+/).filter((t) => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+(st|nd|rd|th)$/.test(t));
 }
 function buildTitleTokens(titles) {
-  const tokens = /* @__PURE__ */ new Set();
+  const all = /* @__PURE__ */ new Set();
   for (const t of titles) {
-    for (const tok of significantTokens(t)) tokens.add(tok);
+    for (const tok of significantTokens(t)) all.add(tok);
   }
-  return tokens;
+  const arr = [...all];
+  return new Set(arr.filter((tok) => !arr.some((other) => other !== tok && other.includes(tok))));
+}
+function tokenInTitle(tok, lower) {
+  return new RegExp("\\b" + tok + "\\b").test(lower);
 }
 function resultMatchesShow(resultTitle, tokens) {
   if (!tokens.size) return true;
   const lower = resultTitle.toLowerCase();
   for (const tok of tokens) {
-    if (lower.includes(tok)) return true;
+    if (tokenInTitle(tok, lower)) return true;
   }
   return false;
 }
@@ -88,8 +92,16 @@ function trimTitleForQuery(title) {
   const base = colon > 0 ? title.slice(0, colon) : title;
   return significantTokens(base).slice(0, 4).join(" ") || escapeQuery(title);
 }
-function titlesByLengthAsc(titles) {
-  return [...titles].sort((a, b) => a.length - b.length);
+function rankTitlesForQuery(titles) {
+  return titles.map((t) => {
+    const stripped = String(t).replace(/\s/g, "");
+    const ascii = escapeQuery(t).replace(/\s/g, "");
+    return {
+      t,
+      tokens: significantTokens(t).length,
+      asciiRatio: stripped.length ? ascii.length / stripped.length : 0
+    };
+  }).filter((x) => x.tokens > 0).sort((a, b) => b.asciiRatio - a.asciiRatio || b.tokens - a.tokens).map((x) => x.t);
 }
 function pad(n) {
   const s = String(n);
@@ -251,7 +263,7 @@ async function runSearch(query, opts) {
   const showTokens = buildTitleTokens(query.titles);
   const seen = /* @__PURE__ */ new Set();
   const results = [];
-  const titles = titlesByLengthAsc(query.titles).slice(0, 2);
+  const titles = rankTitlesForQuery(query.titles).slice(0, 2);
   outer: for (const title of titles) {
     const variants = queryVariantsForTitle(title, opts);
     for (const q of variants) {
