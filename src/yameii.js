@@ -1,7 +1,7 @@
 import {
   buildTitleTokens, resultMatchesShow, titleHasEpisode, looksLikeBatch,
   trimTitleForQuery, rankTitlesForQuery, matchesResolution,
-  hitsExclusion, buildMagnet, parseSize, pickTag, pickItems
+  hitsExclusion, buildMagnet, parseSize, pickTag, pickItems, httpGet
 } from './lib/shared.js'
 
 const NYAA_BASE = 'https://nyaa.si'
@@ -17,7 +17,7 @@ async function rssSearch (query) {
   const url = NYAA_BASE + '/' + qs
   let res
   try {
-    res = await fetch(url)
+    res = await httpGet(url)
   } catch (err) {
     throw new Error('Cannot reach nyaa.si. Check your internet connection or try again later.')
   }
@@ -157,7 +157,7 @@ export default new class Yameii {
     const url = NYAA_BASE + '/?u=' + encodeURIComponent(UPLOADER) + '&page=rss&c=' + ANIME_CATEGORY
     let res
     try {
-      res = await fetch(url)
+      res = await httpGet(url)
     } catch (err) {
       throw new Error('Cannot reach nyaa.si. Check your internet connection or try again later.')
     }

@@ -1,7 +1,7 @@
 import {
   buildTitleTokens, resultMatchesShow, titleHasEpisode, looksLikeBatch,
   trimTitleForQuery, rankTitlesForQuery, pad, matchesResolution,
-  hitsExclusion, buildMagnet, parseSize, pickTag, pickItems
+  hitsExclusion, buildMagnet, parseSize, pickTag, pickItems, httpGet
 } from './lib/shared.js'
 
 const NYAA_BASE = 'https://nyaa.si'
@@ -12,7 +12,7 @@ async function rssSearch (query) {
     '&c=' + ANIME_CATEGORY + '&s=id&o=desc'
   let res
   try {
-    res = await fetch(url)
+    res = await httpGet(url)
   } catch (err) {
     throw new Error('Cannot reach nyaa.si. Check your internet connection or try again later.')
   }
@@ -157,7 +157,7 @@ export default new class Nyaa {
     const url = NYAA_BASE + '/?page=rss&q=one+piece&c=' + ANIME_CATEGORY
     let res
     try {
-      res = await fetch(url)
+      res = await httpGet(url)
     } catch (err) {
       throw new Error('Cannot reach nyaa.si. Check your internet connection or try again later.')
     }

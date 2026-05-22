@@ -1,4 +1,12 @@
 // src/lib/shared.js
+var BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  Accept: "application/xml, text/xml, text/html, application/json, */*"
+};
+function httpGet(url, opts = {}) {
+  const { headers, ...rest } = opts;
+  return fetch(url, { headers: { ...BROWSER_HEADERS, ...headers }, ...rest });
+}
 var TRACKERS = [
   "udp://tracker.opentrackr.org:1337/announce",
   "udp://open.stealth.si:80/announce",
@@ -221,7 +229,7 @@ async function rssSearch(query) {
   const url = NYAA_BASE + "/?page=rss&q=" + encodeURIComponent(query) + "&c=" + ANIME_CATEGORY + "&s=id&o=desc";
   let res;
   try {
-    res = await fetch(url);
+    res = await httpGet(url);
   } catch (err) {
     throw new Error("Cannot reach nyaa.si. Check your internet connection or try again later.");
   }
@@ -349,7 +357,7 @@ var nyaa_default = new class Nyaa {
     const url = NYAA_BASE + "/?page=rss&q=one+piece&c=" + ANIME_CATEGORY;
     let res;
     try {
-      res = await fetch(url);
+      res = await httpGet(url);
     } catch (err) {
       throw new Error("Cannot reach nyaa.si. Check your internet connection or try again later.");
     }

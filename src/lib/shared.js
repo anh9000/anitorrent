@@ -1,6 +1,22 @@
 // Shared matching, query, and torrent helpers used by every source.
 // Single source of truth: fix matching logic here once, all sources inherit it.
 
+// nyaa.si sits behind ddos-guard, which serves a challenge page (not RSS) to
+// clients that do not look like a browser. A plain fetch() with no User-Agent
+// gets challenged in some host environments, so the response has no <item> and
+// the source returns nothing. Sending browser-like headers gets past it. In a
+// real browser/worker, User-Agent is a forbidden header and is silently
+// ignored (the browser sets its own), so this is safe everywhere.
+export const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  Accept: 'application/xml, text/xml, text/html, application/json, */*'
+}
+
+export function httpGet (url, opts = {}) {
+  const { headers, ...rest } = opts
+  return fetch(url, { headers: { ...BROWSER_HEADERS, ...headers }, ...rest })
+}
+
 export const TRACKERS = [
   'udp://tracker.opentrackr.org:1337/announce',
   'udp://open.stealth.si:80/announce',

@@ -4,7 +4,13 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
-## [1.6.1] - 2026-05-21 (stable)
+## [1.6.2] - 2026-05-22 (stable)
+
+Per-source bumps: `nyaa 1.0.14`, `yameii 1.0.11`, `toonshub 1.0.8`. The three other sources are unchanged. Relaunch Hayase to pick this up.
+
+### Fixed
+
+- **The three nyaa.si-based sources (Nyaa, Yameii, ToonsHub) could return nothing while the others worked.** nyaa.si sits behind ddos-guard, which serves a challenge page instead of the RSS feed to clients that do not look like a browser. Our request sent no `User-Agent`, so in some host environments ddos-guard challenged it, the response had no torrent items, and the source surfaced zero results. The symptom: a current-season show returned only SubsPlease results (SubsPlease, AnimeTosho, and Seadex each hit a different server that is not behind ddos-guard, so they were unaffected). Requests to nyaa.si now send browser-like headers (`User-Agent` + `Accept`) via a shared `httpGet` helper, which gets past the challenge. In a real browser or worker, `User-Agent` is a forbidden header and is silently ignored, so the change is safe in every environment. Only the bundles that actually call nyaa.si carry the change; the others are byte-identical and were not bumped.
 
 Per-source bumps: `nyaa 1.0.13`, `animetosho 1.0.8`, `yameii 1.0.10`, `toonshub 1.0.7`, `subsplease 1.0.6`. Seadex is unchanged (it only uses the magnet builder, not the matching logic). Already-installed users get the update on next Hayase launch.
 
