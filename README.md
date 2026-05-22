@@ -80,35 +80,84 @@ These are personal picks that ship enabled by default but are entirely toggleabl
 
 All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub badges regardless. The badge is purely informational, it does not filter results.
 
+## How it works
+
+When you open a torrent picker, Hayase hands the same query to every enabled source. They run in parallel, each filters its own results through the shared matching logic, and Hayase merges everything and de-duplicates by infohash (so a release that several sources carry shows up once).
+
+```mermaid
+flowchart TD
+    Q["Hayase query<br/>titles · episode · resolution · exclusions"]
+    Q --> SRC
+
+    subgraph SRC["six sources query in parallel"]
+        direction LR
+        NY["Nyaa<br/><sub>nyaa.si</sub>"]
+        AT["AnimeTosho<br/><sub>feed.animetosho.org</sub>"]
+        SD["Seadex<br/><sub>releases.moe</sub>"]
+        SP["SubsPlease<br/><sub>subsplease.org</sub>"]
+        YM["Yameii<br/><sub>nyaa.si</sub>"]
+        TH["ToonsHub<br/><sub>nyaa.si</sub>"]
+    end
+
+    MAP[("anilist-to-anidb.json")] -. "AniList ID to AniDB ID" .-> AT
+
+    SRC --> FILTER["shared filter · src/lib/shared.js<br/>pick query title · match show · episode · resolution · exclusions"]
+    FILTER --> MERGE["Hayase merges all sources<br/>de-duplicate by infohash"]
+    MERGE --> OUT["results in the picker"]
+```
+
+The matching logic (which title to search with, how to tell a torrent belongs to the show, episode and batch detection) lives once in `src/lib/shared.js` and is inlined into every source at build time, so a fix applies everywhere at once.
+
 ## Frequently asked questions
 
-### Where can I find Hayase extensions?
+<details>
+<summary><strong>Where can I find Hayase extensions?</strong></summary>
 
 This repo is one option. The previously-popular extensions in the `hayase-app` ecosystem (Nyaa, AnimeTosho, Seadex) have been marked Outdated and unmaintained for months. This pack picks up where they left off with six current, auto-updating sources.
 
-### How do I install extensions in Hayase?
+</details>
+
+<details>
+<summary><strong>How do I install extensions in Hayase?</strong></summary>
 
 Open Hayase. Settings, then Extensions, then the Repositories tab. Paste the install URL into the textbox at the top. Click Import Extensions. The sources appear in the Extensions tab where you can toggle each one on or off independently.
 
-### How do I update Hayase extensions?
+</details>
+
+<details>
+<summary><strong>How do I update Hayase extensions?</strong></summary>
 
 Hayase auto-polls every extension's manifest URL on launch. As long as the extension's `update` field points to a maintained URL, new versions flow in automatically when you restart Hayase. For this pack specifically, just relaunch Hayase. All six sources stay current with no action from you.
 
-### Why are my existing Hayase extensions marked "Outdated"?
+</details>
+
+<details>
+<summary><strong>Why are my existing Hayase extensions marked "Outdated"?</strong></summary>
 
 The Outdated badge means the upstream manifest published a higher version number than what you have installed. For the official `hayase-app` extensions, this means the maintainers stopped publishing updates. Either delete those and import this pack, or wait for the original maintainers to ship a new version.
 
-### Does this Hayase extension work on Android?
+</details>
+
+<details>
+<summary><strong>Does this Hayase extension work on Android?</strong></summary>
 
 Yes. The same install URL works in Hayase on Android (8.0 or later). iOS is not supported because Hayase itself is not available on iOS, since Apple bans BitTorrent apps from the App Store.
 
-### Is this Hayase extension safe?
+</details>
+
+<details>
+<summary><strong>Is this Hayase extension safe?</strong></summary>
 
 All source code is in this public repo. It only talks to public APIs (`nyaa.si`, `feed.animetosho.org`, `releases.moe`, `subsplease.org`). No tracking, no analytics, no authentication. Every source file is in the `src/` directory and the bundles in `dist/` are auto-built from those sources by GitHub Actions.
 
-### What sources does this pack include?
+</details>
+
+<details>
+<summary><strong>What sources does this pack include?</strong></summary>
 
 Six: Nyaa (raw firehose), AnimeTosho (anidb-mapped aggregator), Seadex (community-curated best releases), SubsPlease (weekly fansubs), Yameii (English dubs), and ToonsHub (dual-audio and multi-sub group releases). All toggleable.
+
+</details>
 
 ## ID mapping
 
