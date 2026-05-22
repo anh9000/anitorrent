@@ -85,9 +85,7 @@ All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub 
 When you open a torrent picker, Hayase hands the same query to every enabled source. They run in parallel, each filters its own results through the shared matching logic, and Hayase merges everything and de-duplicates by infohash (so a release that several sources carry shows up once).
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/anh9000/anitorrent/main/.github/assets/how-it-works.svg">
-    <img src="./.github/assets/how-it-works.svg" alt="anitorrent search flow: a Hayase query fans out to six sources in parallel, an AniList-to-AniDB map feeds AnimeTosho, all results pass through the shared filter, then Hayase merges and de-duplicates by infohash before showing results" width="900">
-  </a>
+  <img src="./.github/assets/how-it-works.svg" alt="anitorrent search flow: a Hayase query fans out to six sources in parallel, an AniList-to-AniDB map feeds AnimeTosho, all results pass through the shared filter, then Hayase merges and de-duplicates by infohash before showing results" width="900">
 </p>
 
 The matching logic (which title to search with, how to tell a torrent belongs to the show, episode and batch detection) lives once in `src/lib/shared.js` and is inlined into every source at build time, so a fix applies everywhere at once.
