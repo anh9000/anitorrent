@@ -35,15 +35,15 @@ Settings → Extensions → paste.
 
 Built and verified against this Hayase build:
 
-```ansi
-[92m┌────────────────────────┬──────────────────────┐[0m
-[92m│ COMPONENT              │ VERSION              │[0m
-[92m├────────────────────────┼──────────────────────┤[0m
-[92m│ Hayase Interface       │ v6.4.366             │[0m
-[92m│ Hayase Native          │ 6.4.69               │[0m
-[92m│ Platform               │ Windows              │[0m
-[92m│ All six sources online │ verified 2026-05-18  │[0m
-[92m└────────────────────────┴──────────────────────┘[0m
+```text
+┌────────────────────────┬──────────────────────┐
+│ COMPONENT              │ VERSION              │
+├────────────────────────┼──────────────────────┤
+│ Hayase Interface       │ v6.4.366             │
+│ Hayase Native          │ 6.4.69               │
+│ Platform               │ Windows              │
+│ All six sources online │ verified 2026-05-18  │
+└────────────────────────┴──────────────────────┘
 ```
 
 The extensions page in Hayase, all six sources green and current:
@@ -66,28 +66,28 @@ What a search looks like (Nippon Sangoku, episode 7), pulling results from multi
 
 ### Core (recommended for everyone)
 
-```ansi
-[92m┌────────────┬──────────┬──────────────────────────────────────────┐[0m
-[92m│ SOURCE     │ ACCURACY │ BEST FOR                                 │[0m
-[92m├────────────┼──────────┼──────────────────────────────────────────┤[0m
-[92m│ Nyaa       │ medium   │ raw firehose, every anime upload         │[0m
-[92m│ AnimeTosho │ high     │ anidb-mapped lookups, batch packs        │[0m
-[92m│ Seadex     │ high     │ community-curated best releases          │[0m
-[92m│ SubsPlease │ high     │ currently-airing weekly subs             │[0m
-[92m└────────────┴──────────┴──────────────────────────────────────────┘[0m
+```text
+┌────────────┬──────────┬──────────────────────────────────────────┐
+│ SOURCE     │ ACCURACY │ BEST FOR                                 │
+├────────────┼──────────┼──────────────────────────────────────────┤
+│ Nyaa       │ medium   │ raw firehose, every anime upload         │
+│ AnimeTosho │ high     │ anidb-mapped lookups, batch packs        │
+│ Seadex     │ high     │ community-curated best releases          │
+│ SubsPlease │ high     │ currently-airing weekly subs             │
+└────────────┴──────────┴──────────────────────────────────────────┘
 ```
 
 ### Curator picks (optional)
 
 These are personal picks that ship enabled by default but are entirely toggleable.<br>Disable them in Settings → Extensions if you don't want them.
 
-```ansi
-[92m┌────────────┬──────────┬────────────────────────────────────────────┐[0m
-[92m│ SOURCE     │ ACCURACY │ WHAT IT ADDS                               │[0m
-[92m├────────────┼──────────┼────────────────────────────────────────────┤[0m
-[92m│ Yameii     │ high     │ single-uploader English dub re-encodes     │[0m
-[92m│ ToonsHub   │ high     │ dual-audio + multi-sub group releases      │[0m
-[92m└────────────┴──────────┴────────────────────────────────────────────┘[0m
+```text
+┌────────────┬──────────┬────────────────────────────────────────────┐
+│ SOURCE     │ ACCURACY │ WHAT IT ADDS                               │
+├────────────┼──────────┼────────────────────────────────────────────┤
+│ Yameii     │ high     │ single-uploader English dub re-encodes     │
+│ ToonsHub   │ high     │ dual-audio + multi-sub group releases      │
+└────────────┴──────────┴────────────────────────────────────────────┘
 ```
 
 - **Yameii** is a narrow catalog but consistent quality. IRC: `#Yameii@irc.rizon.net`
@@ -99,38 +99,38 @@ All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub 
 
 When you open a torrent picker, Hayase hands the same query to every enabled source. They run in parallel, each filters its own results through the shared matching logic, and Hayase merges everything and de-duplicates by infohash (so a release that several sources carry shows up once).
 
-```ansi
-[92m┌─────────────────────────────────────────────────┐[0m
-[92m│ HAYASE  QUERY                                   │[0m
-[92m│ titles · episode · resolution · exclusions      │[0m
-[92m└────────────────────────┬────────────────────────┘[0m
-[92m                         │  the same query goes to every enabled source[0m
-[92m                         ▼[0m
-[92m┌─────────────────────────────────────────────────┐[0m
-[92m│ SOURCES   (queried in parallel)                 │[0m
-[92m│                                                 │[0m
-[92m│ Nyaa         nyaa.si             raw firehose   │[0m
-[92m│ AnimeTosho   feed.animetosho.org anidb-mapped   │[0m
-[92m│ Seadex       releases.moe        best releases  │[0m
-[92m│ SubsPlease   subsplease.org      weekly subs    │[0m
-[92m│ Yameii       nyaa.si             english dubs   │[0m
-[92m│ ToonsHub     nyaa.si             dual-audio     │[0m
-[92m└────────────────────────┬────────────────────────┘[0m
-[92m                         │  each source filters its own hits through[0m
-[92m                         ▼[0m
-[92m┌─────────────────────────────────────────────────┐[0m
-[92m│ SHARED FILTER · src/lib/shared.js               │[0m
-[92m│ pick query title · match show · episode · res   │[0m
-[92m└────────────────────────┬────────────────────────┘[0m
-[92m                         ▼[0m
-[92m┌─────────────────────────────────────────────────┐[0m
-[92m│ HAYASE MERGES EVERY SOURCE                      │[0m
-[92m│ de-duplicate by infohash                        │[0m
-[92m└────────────────────────┬────────────────────────┘[0m
-[92m                         ▼[0m
-[92m┌─────────────────────────────────────────────────┐[0m
-[92m│ RESULTS IN THE PICKER                           │[0m
-[92m└─────────────────────────────────────────────────┘[0m
+```text
+┌─────────────────────────────────────────────────┐
+│ HAYASE  QUERY                                   │
+│ titles · episode · resolution · exclusions      │
+└────────────────────────┬────────────────────────┘
+                         │  the same query goes to every enabled source
+                         ▼
+┌─────────────────────────────────────────────────┐
+│ SOURCES   (queried in parallel)                 │
+│                                                 │
+│ Nyaa         nyaa.si             raw firehose   │
+│ AnimeTosho   feed.animetosho.org anidb-mapped   │
+│ Seadex       releases.moe        best releases  │
+│ SubsPlease   subsplease.org      weekly subs    │
+│ Yameii       nyaa.si             english dubs   │
+│ ToonsHub     nyaa.si             dual-audio     │
+└────────────────────────┬────────────────────────┘
+                         │  each source filters its own hits through
+                         ▼
+┌─────────────────────────────────────────────────┐
+│ SHARED FILTER · src/lib/shared.js               │
+│ pick query title · match show · episode · res   │
+└────────────────────────┬────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────┐
+│ HAYASE MERGES EVERY SOURCE                      │
+│ de-duplicate by infohash                        │
+└────────────────────────┬────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────┐
+│ RESULTS IN THE PICKER                           │
+└─────────────────────────────────────────────────┘
 ```
 
 The matching logic (which title to search with, how to tell a torrent belongs to the show, episode and batch detection) lives once in `src/lib/shared.js` and is inlined into every source at build time, so a fix applies everywhere at once.
