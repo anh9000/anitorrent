@@ -84,27 +84,11 @@ All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub 
 
 When you open a torrent picker, Hayase hands the same query to every enabled source. They run in parallel, each filters its own results through the shared matching logic, and Hayase merges everything and de-duplicates by infohash (so a release that several sources carry shows up once).
 
-```mermaid
-flowchart TD
-    Q["Hayase query<br/>titles · episode · resolution · exclusions"]
-    Q --> SRC
-
-    subgraph SRC["six sources query in parallel"]
-        direction LR
-        NY["Nyaa<br/><sub>nyaa.si</sub>"]
-        AT["AnimeTosho<br/><sub>feed.animetosho.org</sub>"]
-        SD["Seadex<br/><sub>releases.moe</sub>"]
-        SP["SubsPlease<br/><sub>subsplease.org</sub>"]
-        YM["Yameii<br/><sub>nyaa.si</sub>"]
-        TH["ToonsHub<br/><sub>nyaa.si</sub>"]
-    end
-
-    MAP[("anilist-to-anidb.json")] -. "AniList ID to AniDB ID" .-> AT
-
-    SRC --> FILTER["shared filter · src/lib/shared.js<br/>pick query title · match show · episode · resolution · exclusions"]
-    FILTER --> MERGE["Hayase merges all sources<br/>de-duplicate by infohash"]
-    MERGE --> OUT["results in the picker"]
-```
+<p align="center">
+  <a href="https://raw.githubusercontent.com/anh9000/anitorrent/main/.github/assets/how-it-works.svg">
+    <img src="./.github/assets/how-it-works.svg" alt="anitorrent search flow: a Hayase query fans out to six sources in parallel, an AniList-to-AniDB map feeds AnimeTosho, all results pass through the shared filter, then Hayase merges and de-duplicates by infohash before showing results" width="900">
+  </a>
+</p>
 
 The matching logic (which title to search with, how to tell a torrent belongs to the show, episode and batch detection) lives once in `src/lib/shared.js` and is inlined into every source at build time, so a fix applies everywhere at once.
 
