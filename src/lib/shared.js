@@ -114,6 +114,18 @@ export function looksLikeBatch (title) {
   return BATCH_PATTERNS.some(re => re.test(title))
 }
 
+// Common English words that are too broad to be a useful standalone search
+// query (a synonym like "Monster #8" or romaji that strips to "Level" would
+// otherwise drag in every unrelated show containing the word). Only used to
+// DEMOTE such a title when the show has a better one; if it is the only title,
+// it is still used. Distinct from STOPWORDS (which are dropped from matching).
+export const GENERIC_QUERY_WORDS = new Set([
+  'monster', 'level', 'hero', 'world', 'girl', 'boy', 'demon', 'devil',
+  'dragon', 'angel', 'king', 'queen', 'story', 'magic', 'school', 'love',
+  'life', 'club', 'sword', 'blood', 'dark', 'light', 'night', 'master',
+  'star', 'moon', 'witch', 'ghost', 'dead', 'zombie', 'idol', 'club'
+])
+
 export function trimTitleForQuery (title) {
   const colon = title.indexOf(':')
   const base = colon > 0 ? title.slice(0, colon) : title
@@ -122,64 +134,42 @@ export function trimTitleForQuery (title) {
 
 export function rankTitlesForQuery (titles) {
   const list = (titles || [])
-    .map(t => {
+    .map((t, i) => {
       const stripped = String(t).replace(/\s/g, '')
       const ascii = escapeQuery(t).replace(/\s/g, '')
-      const toks = significantTokens(t)
-      const maxTok = toks.reduce((m, s) => Math.max(m, s.length), 0)
+      const queryToks = trimTitleForQuery(t).split(/\s+/).filter(Boolean)
       return {
         t,
-        tokens: toks.length,
-        maxTok,
-        signature: maxTok >= 4 ? toks.find(s => s.length === maxTok) : '',
-        despaced: escapeQuery(t).toLowerCase().replace(/\s/g, ''),
+        i,
+        tokens: significantTokens(t).length,
+        // A query is "degenerate" when it collapses to a single word that is
+        // too generic to search: very short ("Orb: ..." -> "orb") or a common
+        // word ("Ore dake Level Up na Ken" -> "level", "Monster #8" -> "monster").
+        // A specific single token ("bakemonogatari", "noragami", "kaiju") is
+        // fine. Degenerate titles get demoted so a better title is queried first.
+        degenerate: queryToks.length <= 1 &&
+          ((queryToks[0] || '').length < 4 || GENERIC_QUERY_WORDS.has(queryToks[0])),
         asciiRatio: stripped.length ? ascii.length / stripped.length : 0
       }
     })
     .filter(x => x.tokens > 0)
 
-  // Cross-title recurrence: how many of the show's OTHER titles contain this
-  // title's signature (longest) token, as a substring so it survives spacing
-  // and romanization differences (kaiju in kaijuu in 8kaijuu, monogatari in
-  // bakemonogatari). A canonical name's signature recurs across romaji /
-  // english / transliterations; a one-off descriptive synonym ("Monster #8",
-  // "Monster Tale", "Stray God", "Tiger X Dragon", "HxH") matches nothing else.
-  // That recurrence is what reliably separates the real title from loose
-  // synonyms, which when chosen as the search query drag in unrelated shows
-  // that then slip past token matching. Picking by longest token alone fails
-  // ("Monster #8" has a longer token than "Kaiju No. 8" yet is the wrong query).
-  for (const x of list) {
-    x.recur = x.signature
-      ? list.reduce((n, y) => {
-        if (y === x || !y.signature) return n
-        // bidirectional: relate if either signature contains the other, so the
-        // pair is credited symmetrically and the maxTok tiebreaker then picks
-        // the longer, more specific name (bakemonogatari over monogatari).
-        const related = y.despaced.includes(x.signature) || x.despaced.includes(y.signature)
-        return n + (related ? 1 : 0)
-      }, 0)
-      : 0
-  }
-
-  // Prefer mostly-Latin titles (romaji/english) over heavily transliterated
-  // foreign synonyms. If every title is foreign, keep them all as a fallback so
-  // the show still searches something (never return zero -> Witch Hat bug).
+  // Prefer mostly-Latin titles (romaji / english) over heavily transliterated
+  // foreign synonyms; fall back to all titles if every one is foreign so the
+  // show still searches something (never return zero -> Witch Hat bug).
   const latin = list.filter(x => x.asciiRatio >= 0.5)
   const pool = latin.length ? latin : list
-  // Recurrence is a boolean GATE, not a weighted count: counting biases toward
-  // short generic tokens ("level", "monster") because a shorter token is a
-  // substring of more titles, which is exactly the wrong title to query. So we
-  // only ask "does this title's signature recur at all", then pick the LONGEST
-  // signature among those that do (bakemonogatari over monogatari, solo
-  // leveling over the bare "level" of "Ore dake Level Up na Ken"). Shows whose
-  // titles share nothing (Noragami, Toradora) have no recurrence and fall back
-  // to longest-token, which is still the canonical name over a short synonym.
+
+  // Then KEEP THE ORIGINAL ORDER. AniList and Hayase provide the canonical
+  // romaji and english titles first and the foreign synonyms / acronyms /
+  // descriptive translations ("HxH", "Monster #8", "Stray God", "Atelier
+  // spiczastych kapeluszy") last, and the canonical titles are what release
+  // groups actually name files after. Reordering by token length or "cleverer"
+  // heuristics is what promoted foreign synonyms to the top and made shows like
+  // Witch Hat Atelier search a Polish title and return nothing. The only
+  // reordering is pushing degenerate single-word queries to the back.
   return pool
-    .sort((a, b) =>
-      ((b.recur > 0) - (a.recur > 0)) ||
-      (b.maxTok - a.maxTok) ||
-      (b.tokens - a.tokens) ||
-      (b.asciiRatio - a.asciiRatio))
+    .sort((a, b) => (a.degenerate - b.degenerate) || (a.i - b.i))
     .map(x => x.t)
 }
 

@@ -4,6 +4,25 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.3] - 2026-05-22 (stable)
+
+Per-source bumps: `nyaa 1.0.15`, `animetosho 1.0.9`, `subsplease 1.0.7`, `yameii 1.0.12`, `toonshub 1.0.9`. Seadex unchanged. Relaunch Hayase to update.
+
+### The problem this release fixes
+
+After v1.6.1 shipped, the Nyaa source returned nothing for some shows in the app (Witch Hat Atelier was the report) while SubsPlease still worked. This was a regression I introduced in v1.6.1, not a network or environment problem. Running a show's REAL, full AniList title set (the v1.6.1 work was validated against title sets that were missing some foreign synonyms) reproduced it exactly: Witch Hat Atelier returned 0 results.
+
+The cause was the v1.6.1 query-selection rewrite. AniList and Hayase hand the titles over in a deliberate order: the canonical romaji and english titles first, then the native title, then foreign-language synonyms. The pre-v1.6.1 ranking happened to preserve that order, so it searched the romaji or english title, which is what release groups name files after. The v1.6.1 rewrite actively reordered titles by a token-recurrence-and-length score, and for Witch Hat Atelier that promoted the Polish synonym "Atelier spiczastych kapeluszy" and the French "L'Atelier des Sorciers" to the top. Searching nyaa.si for a Polish title returns nothing, so the source came up empty. The v1.6.2 release guessed the cause was a network/ddos-guard block and added browser headers; that was treating a symptom and was not the actual problem.
+
+### Changed
+
+- **Query selection now respects the title order AniList/Hayase provide instead of reordering it.** It keeps mostly-Latin titles (dropping native and heavily transliterated foreign synonyms), preserves the original order so the canonical romaji and english titles are searched first, and only demotes a title whose query collapses to a single generic word ("Ore dake Level Up na Ken" stripping to "level", "Orb: ..." stripping to "orb", "Monster #8" to "monster") so a more specific title is tried first. This replaces the v1.6.1 recurrence-and-length scoring, which was clever but wrong: it could rank a foreign synonym above the real title. Verified against the real full AniList title sets for Witch Hat Atelier, Hunter x Hunter, Bakemonogatari, Noragami, Toradora, Kaiju No. 8, Solo Leveling, and Orb; all now search their canonical title. Witch Hat Atelier goes from 0 results to 22 on the exact title set that was failing.
+- The browser headers added in v1.6.2 are kept (they are harmless and a reasonable safety measure for ddos-guard), but they were not the fix.
+
+### Lesson
+
+- The relevance tests were validating against an artificial title order (native and synonyms first) on the assumption that title order could not be trusted. That assumption is what motivated the fragile v1.6.1 ranking and hid this bug. The tests now use the real order (romaji and english first), which is what the app actually passes.
+
 ## [1.6.2] - 2026-05-22 (stable)
 
 Per-source bumps: `nyaa 1.0.14`, `yameii 1.0.11`, `toonshub 1.0.8`. The three other sources are unchanged. Relaunch Hayase to pick this up.

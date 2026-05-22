@@ -29,7 +29,9 @@ const DELAY = 1100      // ms between shows (rate-limit safety)
 const RETRY_WAIT = 4000 // ms backoff on transient network failure
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
-const titlesOf = s => [s.native, ...(s.synonyms || []), s.romaji, s.english].filter(Boolean)
+// Canonical romaji + english first, then native, then foreign synonyms, as
+// AniList/Hayase actually provide them (query selection depends on this order).
+const titlesOf = s => [s.romaji, s.english, s.native, ...(s.synonyms || [])].filter(Boolean)
 
 // strong franchise tokens: >=4-char words from canonical English + romaji only
 const strongTokens = s => {

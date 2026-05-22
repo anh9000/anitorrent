@@ -88,36 +88,66 @@ function resultMatchesShow(title, tokens, minHits = 1) {
   }
   return false;
 }
+var GENERIC_QUERY_WORDS = /* @__PURE__ */ new Set([
+  "monster",
+  "level",
+  "hero",
+  "world",
+  "girl",
+  "boy",
+  "demon",
+  "devil",
+  "dragon",
+  "angel",
+  "king",
+  "queen",
+  "story",
+  "magic",
+  "school",
+  "love",
+  "life",
+  "club",
+  "sword",
+  "blood",
+  "dark",
+  "light",
+  "night",
+  "master",
+  "star",
+  "moon",
+  "witch",
+  "ghost",
+  "dead",
+  "zombie",
+  "idol",
+  "club"
+]);
 function trimTitleForQuery(title) {
   const colon = title.indexOf(":");
   const base = colon > 0 ? title.slice(0, colon) : title;
   return significantTokens(base).slice(0, 4).join(" ") || escapeQuery(title);
 }
 function rankTitlesForQuery(titles) {
-  const list = (titles || []).map((t) => {
+  const list = (titles || []).map((t, i) => {
     const stripped = String(t).replace(/\s/g, "");
     const ascii = escapeQuery(t).replace(/\s/g, "");
-    const toks = significantTokens(t);
-    const maxTok = toks.reduce((m, s) => Math.max(m, s.length), 0);
+    const queryToks = trimTitleForQuery(t).split(/\s+/).filter(Boolean);
     return {
       t,
-      tokens: toks.length,
-      maxTok,
-      signature: maxTok >= 4 ? toks.find((s) => s.length === maxTok) : "",
-      despaced: escapeQuery(t).toLowerCase().replace(/\s/g, ""),
+      i,
+      tokens: significantTokens(t).length,
+      // A query is "degenerate" when it collapses to a single word that is
+      // too generic to search: very short ("Orb: ..." -> "orb") or a common
+      // word ("Ore dake Level Up na Ken" -> "level", "Monster #8" -> "monster").
+      // A specific single token ("bakemonogatari", "noragami", "kaiju") is
+      // fine. Degenerate titles get demoted so a better title is queried first.
+      degenerate: queryToks.length <= 1 && ((queryToks[0] || "").length < 4 || GENERIC_QUERY_WORDS.has(queryToks[0])),
       asciiRatio: stripped.length ? ascii.length / stripped.length : 0
     };
   }).filter((x) => x.tokens > 0);
-  for (const x of list) {
-    x.recur = x.signature ? list.reduce((n, y) => {
-      if (y === x || !y.signature) return n;
-      const related = y.despaced.includes(x.signature) || x.despaced.includes(y.signature);
-      return n + (related ? 1 : 0);
-    }, 0) : 0;
-  }
   const latin = list.filter((x) => x.asciiRatio >= 0.5);
   const pool = latin.length ? latin : list;
-  return pool.sort((a, b) => (b.recur > 0) - (a.recur > 0) || b.maxTok - a.maxTok || b.tokens - a.tokens || b.asciiRatio - a.asciiRatio).map((x) => x.t);
+  return pool.sort((a, b) => a.degenerate - b.degenerate || a.i - b.i).map((x) => x.t);
 }
 function matchesResolution(title, resolution) {
   if (!resolution) return true;

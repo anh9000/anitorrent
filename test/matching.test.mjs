@@ -19,7 +19,10 @@ import {
 
 const shows = JSON.parse(await readFile(new URL('./fixtures/anime.json', import.meta.url), 'utf8'))
 
-const titlesOf = s => [s.native, ...(s.synonyms || []), s.romaji, s.english].filter(Boolean)
+// Title order matches how AniList/Hayase actually provide them: canonical
+// romaji and english first, then native, then foreign synonyms. Query
+// selection relies on this order (canonical first), so the test must use it.
+const titlesOf = s => [s.romaji, s.english, s.native, ...(s.synonyms || [])].filter(Boolean)
 const releaseForms = title => [
   `[SubsPlease] ${title} - 01 (1080p) [ABCD1234].mkv`,
   `[Erai-raws] ${title} - 01 [1080p][MultiSub]`,
