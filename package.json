@@ -9,8 +9,7 @@
     "clean": "rimraf dist",
     "test": "node test/relevance.test.mjs",
     "test:matching": "node test/matching.test.mjs",
-    "fetch:fixture": "node .github/scripts/fetch-anime-fixture.mjs",
-    "build:diagram": "node .github/scripts/build-diagram.mjs"
+    "fetch:fixture": "node .github/scripts/fetch-anime-fixture.mjs"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",

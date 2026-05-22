@@ -62,21 +62,32 @@ What a search looks like (Nippon Sangoku, episode 7), pulling results from multi
 
 ### Core (recommended for everyone)
 
-| Source | Accuracy | Best for |
-|---|---|---|
-| Nyaa | medium | Raw firehose, full coverage of every anime upload |
-| AnimeTosho | high | Anidb-mapped lookups for older / popular shows + batch packs |
-| Seadex | high | Community-curated "best release" picks |
-| SubsPlease | high | Currently-airing weekly fansubs |
+```text
+┌────────────┬──────────┬──────────────────────────────────────────┐
+│ SOURCE     │ ACCURACY │ BEST FOR                                 │
+├────────────┼──────────┼──────────────────────────────────────────┤
+│ Nyaa       │ medium   │ raw firehose, every anime upload         │
+│ AnimeTosho │ high     │ anidb-mapped lookups, batch packs        │
+│ Seadex     │ high     │ community-curated best releases          │
+│ SubsPlease │ high     │ currently-airing weekly subs             │
+└────────────┴──────────┴──────────────────────────────────────────┘
+```
 
 ### Curator picks (optional)
 
 These are personal picks that ship enabled by default but are entirely toggleable.<br>Disable them in Settings → Extensions if you don't want them.
 
-| Source | Accuracy | What it adds |
-|---|---|---|
-| Yameii | high | Single uploader's English dub re-encodes from nyaa. Narrow catalog but consistent quality. IRC: `#Yameii@irc.rizon.net` |
-| ToonsHub | high | Releases from the ToonsHub group: dual-audio and multi-sub variants for many currently-airing shows. Telegram: [t.me/thtorrents](https://t.me/thtorrents) |
+```text
+┌────────────┬──────────┬────────────────────────────────────────────┐
+│ SOURCE     │ ACCURACY │ WHAT IT ADDS                               │
+├────────────┼──────────┼────────────────────────────────────────────┤
+│ Yameii     │ high     │ single-uploader English dub re-encodes     │
+│ ToonsHub   │ high     │ dual-audio + multi-sub group releases      │
+└────────────┴──────────┴────────────────────────────────────────────┘
+```
+
+- **Yameii** is a narrow catalog but consistent quality. IRC: `#Yameii@irc.rizon.net`
+- **ToonsHub** covers many currently-airing shows. Telegram: [t.me/thtorrents](https://t.me/thtorrents)
 
 All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub badges regardless. The badge is purely informational, it does not filter results.
 
@@ -84,9 +95,39 @@ All six sources declare `media: "both"` in the manifest. Hayase shows Sub + Dub 
 
 When you open a torrent picker, Hayase hands the same query to every enabled source. They run in parallel, each filters its own results through the shared matching logic, and Hayase merges everything and de-duplicates by infohash (so a release that several sources carry shows up once).
 
-<p align="center">
-  <img src="./.github/assets/how-it-works.svg" alt="anitorrent search flow: a Hayase query fans out to six sources in parallel, an AniList-to-AniDB map feeds AnimeTosho, all results pass through the shared filter, then Hayase merges and de-duplicates by infohash before showing results" width="900">
-</p>
+```text
+┌─────────────────────────────────────────────────┐
+│ HAYASE  QUERY                                   │
+│ titles · episode · resolution · exclusions      │
+└────────────────────────┬────────────────────────┘
+                         │  the same query goes to every enabled source
+                         ▼
+┌─────────────────────────────────────────────────┐
+│ SOURCES   (queried in parallel)                 │
+│                                                 │
+│ Nyaa         nyaa.si             raw firehose   │
+│ AnimeTosho   feed.animetosho.org anidb-mapped   │
+│ Seadex       releases.moe        best releases  │
+│ SubsPlease   subsplease.org      weekly subs    │
+│ Yameii       nyaa.si             english dubs   │
+│ ToonsHub     nyaa.si             dual-audio     │
+└────────────────────────┬────────────────────────┘
+                         │  each source filters its own hits through
+                         ▼
+┌─────────────────────────────────────────────────┐
+│ SHARED FILTER · src/lib/shared.js               │
+│ pick query title · match show · episode · res   │
+└────────────────────────┬────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────┐
+│ HAYASE MERGES EVERY SOURCE                      │
+│ de-duplicate by infohash                        │
+└────────────────────────┬────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────┐
+│ RESULTS IN THE PICKER                           │
+└─────────────────────────────────────────────────┘
+```
 
 The matching logic (which title to search with, how to tell a torrent belongs to the show, episode and batch detection) lives once in `src/lib/shared.js` and is inlined into every source at build time, so a fix applies everywhere at once.
 
