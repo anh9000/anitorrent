@@ -4,7 +4,15 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
-## [1.6.3] - 2026-05-22 (stable)
+## [1.6.4] - 2026-07-05 (stable)
+
+Per-source bumps: `nyaa 1.0.16`, `yameii 1.0.13`, `toonshub 1.0.10`. Seadex, AnimeTosho, and SubsPlease are unchanged.
+
+### Changed
+
+- **Friendlier extension-check messages when nyaa.si is slow or down.** The Nyaa, Yameii, and ToonsHub extensions run a health check on Hayase launch. When nyaa.si is briefly unreachable, rate-limiting, or serving a ddos-guard challenge, Hayase used to show a generic "Extension check timed out" toast that reads like the extension itself is broken, when in fact the extension is fine and searches still work. These three extensions now run their health check with their own 6-second timeout (a bit shorter than Hayase's internal limit) and throw specific error messages depending on what actually failed. The toast now says something like "nyaa.si is slow to respond right now. This is temporary and usually clears in a minute. Searches will still work; the extension is fine, no reinstall needed." instead of the generic timeout text. Different messages for rate-limiting, connection errors, HTTP 5xx, and ddos-guard challenge pages so the user has a real idea of what is going on. The extension logic itself did not change; only the health-check UX. Toggling the extension off and on reruns the check.
+
+
 
 Per-source bumps: `nyaa 1.0.15`, `animetosho 1.0.9`, `subsplease 1.0.7`, `yameii 1.0.12`, `toonshub 1.0.9`. Seadex unchanged. Relaunch Hayase to update.
 

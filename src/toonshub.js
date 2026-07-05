@@ -1,7 +1,7 @@
 import {
   buildTitleTokens, resultMatchesShow, titleHasEpisode, looksLikeBatch,
   trimTitleForQuery, rankTitlesForQuery, matchesResolution,
-  hitsExclusion, buildMagnet, parseSize, pickTag, pickItems, httpGet
+  hitsExclusion, buildMagnet, parseSize, pickTag, pickItems, httpGet, checkNyaaFeed
 } from './lib/shared.js'
 
 const NYAA_BASE = 'https://nyaa.si'
@@ -154,17 +154,6 @@ export default new class ToonsHub {
   }
 
   async test () {
-    const url = NYAA_BASE + '/?page=rss&q=' + encodeURIComponent(TITLE_PREFIX) +
-      '&c=' + ANIME_CATEGORY
-    let res
-    try {
-      res = await httpGet(url)
-    } catch (err) {
-      throw new Error('Cannot reach nyaa.si. Check your internet connection or try again later.')
-    }
-    if (!res.ok) {
-      throw new Error('Nyaa returned HTTP ' + res.status + ' for the ToonsHub feed.')
-    }
-    return true
+    return checkNyaaFeed(NYAA_BASE + '/?page=rss&q=' + encodeURIComponent(TITLE_PREFIX) + '&c=' + ANIME_CATEGORY)
   }
 }()

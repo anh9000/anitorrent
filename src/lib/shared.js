@@ -17,6 +17,38 @@ export function httpGet (url, opts = {}) {
   return fetch(url, { headers: { ...BROWSER_HEADERS, ...headers }, ...rest })
 }
 
+// test() runs on Hayase launch and Hayase kills it with a generic "Extension
+// check timed out" toast if it hasn't returned in about ten seconds. We beat
+// that with our own 6s abort so we can throw a specific, non-scary message
+// telling the user what is actually going on and that no reinstall is needed.
+// Used by every nyaa.si-based source (Nyaa, Yameii, ToonsHub).
+export async function checkNyaaFeed (url) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 6000)
+  let res
+  try {
+    res = await httpGet(url, { signal: ctrl.signal })
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('nyaa.si is slow to respond right now. This is temporary and usually clears in a minute. Searches will still work; the extension is fine, no reinstall needed.')
+    }
+    throw new Error('nyaa.si is currently unreachable. The extension will work again once the site is back, nothing to fix on your end.')
+  } finally {
+    clearTimeout(timer)
+  }
+  if (res.status === 429) {
+    throw new Error('nyaa.si is rate-limiting requests. Wait a minute and toggle this extension off and on.')
+  }
+  if (!res.ok) {
+    throw new Error('nyaa.si returned HTTP ' + res.status + '. The extension will work again once the site is back.')
+  }
+  const text = await res.text()
+  if (!text.includes('<rss') && !text.includes('<item>')) {
+    throw new Error('nyaa.si returned an unexpected response (likely a ddos-guard challenge). Try again in a minute; the extension will keep working when it clears.')
+  }
+  return true
+}
+
 export const TRACKERS = [
   'udp://tracker.opentrackr.org:1337/announce',
   'udp://open.stealth.si:80/announce',
