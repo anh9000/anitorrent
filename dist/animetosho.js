@@ -62,7 +62,11 @@ var STOPWORDS = /* @__PURE__ */ new Set([
   "inai",
   "koi",
   "ken",
-  "shi"
+  "shi",
+  // "dan" leaked "Grow Up Show: Himawari no Circus-dan" (Japanese for "troupe")
+  // into every Dandadan search. Dandadan self-match is unaffected because the
+  // canonical title tokens to "dandadan" (14 chars, kept), not "dan".
+  "dan"
 ]);
 function escapeQuery(str) {
   return String(str || "").replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -94,6 +98,32 @@ function resultMatchesShow(title, tokens, minHits = 1) {
     }
   }
   return false;
+}
+var ROMAN_SEASON = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
+function detectResultSeason(title) {
+  const t = String(title || "");
+  let m = t.match(/\bS(\d{1,2})E\d/i);
+  if (m) return parseInt(m[1], 10);
+  m = t.match(/\b(?:Season\s+(\d+)|(\d+)(?:st|nd|rd|th)\s+Season)\b/i);
+  if (m) return parseInt(m[1] || m[2], 10);
+  m = t.match(/\b[A-Za-z]+\s+(II|III|IV|V|VI|VII|VIII|IX|X)(?=\s|:|\.|-|$|\[|\()/);
+  if (m) return ROMAN_SEASON[m[1]];
+  m = t.match(/(?:^|\s)(?:Part\s+)?([2-9])(?=\s*$|\s*[:\-|(\[])/i);
+  if (m) return parseInt(m[1], 10);
+  return null;
+}
+function detectShowSeason(titles) {
+  let max = 0;
+  for (const t of titles || []) {
+    const n = detectResultSeason(t);
+    if (n && n > max) max = n;
+  }
+  return max || 1;
+}
+function resultMatchesSeason(title, showSeason) {
+  const rs = detectResultSeason(title);
+  if (showSeason > 1) return rs === showSeason;
+  return !rs || rs === 1;
 }
 function titleHasEpisode(title, ep) {
   if (ep == null) return true;
@@ -299,8 +329,8 @@ async function fetchByText(titles) {
   }
   return [...seen.values()];
 }
-function filterAndShape(raw, query, mode, showTokens, exclusions, minHits) {
-  let out = dedupe(raw).filter((r) => !hitsExclusion(r.title, exclusions)).filter((r) => resultMatchesShow(r.title, showTokens, minHits));
+function filterAndShape(raw, query, mode, showTokens, exclusions, minHits, showSeason) {
+  let out = dedupe(raw).filter((r) => !hitsExclusion(r.title, exclusions)).filter((r) => resultMatchesShow(r.title, showTokens, minHits)).filter((r) => resultMatchesSeason(r.title, showSeason));
   if (mode === "single" && query.episode != null) {
     out = out.filter((r) => titleHasEpisode(r.title, query.episode));
   }
@@ -314,6 +344,7 @@ async function search(query, mode) {
   const exclusions = query.exclusions || [];
   const resolution = query.resolution || "";
   const showTokens = buildTitleTokens(query.titles || []);
+  const showSeason = detectShowSeason(query.titles || []);
   const minHits = showTokens.size >= 3 ? 2 : 1;
   const resolvedAid = await resolveAnidbAid(query);
   let raw = [];
@@ -330,10 +361,10 @@ async function search(query, mode) {
       raw = [];
     }
   }
-  let results = filterAndShape(raw, query, mode, showTokens, exclusions, minHits);
+  let results = filterAndShape(raw, query, mode, showTokens, exclusions, minHits, showSeason);
   if (!results.length && (query.titles || []).length) {
     const textRaw = await fetchByText(query.titles);
-    results = filterAndShape(textRaw, query, mode, showTokens, exclusions, minHits);
+    results = filterAndShape(textRaw, query, mode, showTokens, exclusions, minHits, showSeason);
   }
   return rank(results, resolution).slice(0, 30);
 }

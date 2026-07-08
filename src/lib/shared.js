@@ -77,7 +77,11 @@ export const STOPWORDS = new Set([
   // and appear across unrelated shows ("-hen" arc suffix, "na Ken", "boku/ore"
   // pronouns, "-sama/-san/-kun/-chan" honorifics). Never show-identifying.
   'hen', 'boku', 'ore', 'kimi', 'sama', 'san', 'kun', 'chan', 'suru',
-  'naru', 'nani', 'desu', 'dake', 'made', 'demo', 'inai', 'koi', 'ken', 'shi'
+  'naru', 'nani', 'desu', 'dake', 'made', 'demo', 'inai', 'koi', 'ken', 'shi',
+  // "dan" leaked "Grow Up Show: Himawari no Circus-dan" (Japanese for "troupe")
+  // into every Dandadan search. Dandadan self-match is unaffected because the
+  // canonical title tokens to "dandadan" (14 chars, kept), not "dan".
+  'dan'
 ])
 
 export function escapeQuery (str) {
@@ -127,6 +131,60 @@ export function resultMatchesShow (title, tokens, minHits = 1) {
     }
   }
   return false
+}
+
+const ROMAN_SEASON = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 }
+
+// Extract a season number from a single title string, or null if none found.
+// Handles "SxxExx", "Season 2", "2nd Season", trailing Roman numeral, trailing
+// digit. Used both to classify the show (from AniList titles) and to classify
+// a torrent result title, so the two can be compared.
+export function detectResultSeason (title) {
+  const t = String(title || '')
+  // "S02E01" / "S2E1"
+  let m = t.match(/\bS(\d{1,2})E\d/i)
+  if (m) return parseInt(m[1], 10)
+  // "Season 2" / "2nd Season" / "3rd Season" / "4th Season"
+  m = t.match(/\b(?:Season\s+(\d+)|(\d+)(?:st|nd|rd|th)\s+Season)\b/i)
+  if (m) return parseInt(m[1] || m[2], 10)
+  // Trailing Roman numeral after a word: "Foo II", "Die Neue These IV"
+  m = t.match(/\b[A-Za-z]+\s+(II|III|IV|V|VI|VII|VIII|IX|X)(?=\s|:|\.|-|$|\[|\()/)
+  if (m) return ROMAN_SEASON[m[1]]
+  // Trailing single digit 2-9 at end / before delimiter, not part of a year
+  // (2019, 2024...) or codec tag (x265, x264). Requires a word boundary after
+  // and no digit or dash immediately before, so we skip "1080p", "S1", "4th".
+  m = t.match(/(?:^|\s)(?:Part\s+)?([2-9])(?=\s*$|\s*[:\-|(\[])/i)
+  if (m) return parseInt(m[1], 10)
+  return null
+}
+
+// Highest season detected across a show's title list. Returns 1 as the default
+// when no season marker is present anywhere (single-season show or unmarked
+// sequel like "Frieren"). We take the max because AniList often lists both the
+// bare franchise name and the season-numbered variant in the same title set,
+// and we want the season-numbered one to win.
+export function detectShowSeason (titles) {
+  let max = 0
+  for (const t of titles || []) {
+    const n = detectResultSeason(t)
+    if (n && n > max) max = n
+  }
+  return max || 1
+}
+
+// True when the result's season is compatible with the searched show.
+// Asymmetric rule reflecting release-group conventions:
+//   - Show is S2+: result MUST carry a matching season marker. Reject anything
+//     with no marker at all (that is almost certainly an older-season release
+//     that just happens to share the show's tokens, e.g. "Youjo Senki - 01"
+//     for a "Youjo Senki II" search).
+//   - Show is S1: reject only results that explicitly claim a higher season
+//     (so "Foo Season 2 - 01" does not leak into a plain "Foo" search).
+//     Bare unmarked results are fine.
+export function resultMatchesSeason (title, showSeason) {
+  const rs = detectResultSeason(title)
+  if (showSeason > 1) return rs === showSeason
+  return !rs || rs === 1
 }
 
 export function titleHasEpisode (title, ep) {

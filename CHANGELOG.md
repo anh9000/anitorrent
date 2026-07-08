@@ -4,7 +4,16 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
-## [1.6.4] - 2026-07-05 (stable)
+## [1.6.5] - 2026-07-08 (stable)
+
+Per-source bumps: `nyaa 1.0.17`, `animetosho 1.0.10`, `subsplease 1.0.8`, `yameii 1.0.14`, `toonshub 1.0.11`. Seadex unchanged.
+
+### Fixed
+
+- **Season 1 releases no longer leak into a Season 2+ search.** When a user opened the torrent picker for a sequel show like "Youjo Senki II", the extension used to return every Season 1 release ("[Erai-raws] Youjo Senki - 01 ~ 12", "[HorribleSubs] Youjo Senki - 01", etc.) because the token filter kept them (both S1 and S2 titles share the tokens `youjo` and `senki`) and the "II" got dropped by the tokenizer as too short. So a fresh S2E1 with nothing on nyaa yet would still show a picker full of unrelated old S1 episodes instead of nothing. Each source now detects the season number from the show's own titles (Roman numeral `II`/`III`, "Season 2", "2nd Season", trailing digit) and requires result titles for S2+ to carry a matching season marker (`S02E`, "Season 2", "II", "2nd", etc.). S1 shows also reject results explicitly claiming a higher season, so "Foo Season 2 - 01" no longer leaks into a plain "Foo" search either. When there really is no matching release, the picker now shows empty instead of a wall of wrong-season episodes. Verified against Youjo Senki II, Re:Zero S4, Attack on Titan Season 3, Kaguya-sama Season 3, Youkoso Jitsuryoku 4th Season, and Ginga Eiyuu Densetsu Die Neue These IV.
+- **"Dan" no longer leaks unrelated shows into Dandadan searches.** The Japanese word "dan" (meaning "troupe/group") appears at the end of many show titles (e.g. "Grow Up Show: Himawari no Circus-dan" started airing this week and immediately began flooding every Dandadan search). Word-boundary matching on the token `dan` treated the `-dan` suffix as its own word and passed those results. Added `dan` to the Japanese-romanization noise stopwords alongside `hen`, `ken`, `sama`, etc. Dandadan self-match is unaffected because its tokens include `dandadan` (14 chars, kept), and release groups almost universally use the concatenated form. Cut Dandadan off-show contamination from 13/28 to 0/9 in the curated live suite.
+
+
 
 Per-source bumps: `nyaa 1.0.16`, `yameii 1.0.13`, `toonshub 1.0.10`. Seadex, AnimeTosho, and SubsPlease are unchanged.
 
