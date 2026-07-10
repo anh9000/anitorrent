@@ -1,14 +1,14 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/title-dark.svg">
-    <img src="./.github/assets/title-light.svg" alt="anitorrent" width="420">
+    <img src="./.github/assets/title-light.svg" alt="anitorrent - Hayase extension pack for Nyaa, AnimeTosho, Seadex, SubsPlease, Yameii, ToonsHub" width="420">
   </picture>
 </p>
 
 <p align="center">
-  Anime torrent extension built for <a href="https://hayase.watch">Hayase</a>.<br>
-  Six toggleable sources, auto-updating in the background, no manual maintenance.<br>
-  <sub>Replaces the abandoned <code>hayase-app</code> extensions (Nyaa, AnimeTosho, Seadex) that have been marked Outdated for months.</sub>
+  <strong>Working Hayase extension pack for 2026.</strong> Drop-in replacement for the outdated <a href="https://github.com/hayase-app"><code>hayase-app</code></a> extensions (Nyaa, AnimeTosho, Seadex).<br>
+  Six auto-updating torrent sources: <strong>Nyaa</strong>, <strong>AnimeTosho</strong>, <strong>Seadex</strong>, <strong>SubsPlease</strong>, <strong>Yameii</strong> (English dubs), and <strong>ToonsHub</strong> (dual-audio).<br>
+  Works on Windows, macOS, Linux, and Hayase on Android. One install URL, no manual maintenance.
 </p>
 
 ## Install in Hayase
