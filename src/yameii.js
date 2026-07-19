@@ -142,6 +142,7 @@ async function runSearch (query, opts) {
 
 export default new class Yameii {
   async single (query) {
+    if (query.episodeCount === 1) return runSearch(query, { movie: true })
     return runSearch(query, { episode: query.episode })
   }
 

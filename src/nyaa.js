@@ -142,6 +142,11 @@ async function runSearch (query, opts) {
 
 export default new class Nyaa {
   async single (query) {
+    // 1-episode entries on AniList are movies or single-episode OVAs. Release
+    // group filenames for these almost never carry an episode marker like "- 01"
+    // or "S01E01", so applying titleHasEpisode() would filter out every real
+    // release. Treat single() on a 1-episode entry as movie mode.
+    if (query.episodeCount === 1) return runSearch(query, { movie: true })
     return runSearch(query, { episode: query.episode })
   }
 

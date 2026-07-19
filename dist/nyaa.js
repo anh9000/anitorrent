@@ -432,6 +432,7 @@ async function runSearch(query, opts) {
 }
 var nyaa_default = new class Nyaa {
   async single(query) {
+    if (query.episodeCount === 1) return runSearch(query, { movie: true });
     return runSearch(query, { episode: query.episode });
   }
   async batch(query) {

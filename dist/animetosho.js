@@ -370,6 +370,7 @@ async function search(query, mode) {
 }
 var animetosho_default = new class AnimeTosho {
   async single(query) {
+    if (query.episodeCount === 1) return search(query, "movie");
     return search(query, "single");
   }
   async batch(query) {

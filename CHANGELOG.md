@@ -4,6 +4,18 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.6] - 2026-07-11 (stable)
+
+Per-source bumps: `nyaa 1.0.18`, `animetosho 1.0.11`, `subsplease 1.0.9`, `yameii 1.0.15`, `toonshub 1.0.12`. Seadex unchanged.
+
+### Fixed
+
+- **Movies and single-episode OVAs now actually return results.** For a title like Vampire Hunter D: Bloodlust (a 1-episode movie), Hayase calls `single({episode: 1})` and the picker was showing at most 2-3 results (only whatever Seadex's curated ID lookup happened to have). The reason: our `single()` was running `titleHasEpisode()` against every result, and release-group filenames for movies almost never contain an episode marker like `- 01` or `S01E01` (they're just titled "[Group] Vampire Hunter D: Bloodlust (2000)"). Every real movie release was silently rejected. Each source's `single()` now checks `query.episodeCount === 1` (Hayase passes the total episode count for the show) and, if so, dispatches to `movie` mode which skips the episode filter. Verified across Vampire Hunter D: Bloodlust, Your Name, Spirited Away, Princess Mononoke, Weathering With You, and Howl's Moving Castle: each went from near-zero to 30 real results. Multi-episode series (One Piece ep 1100, Frieren ep 8, Attack on Titan, Demon Slayer, JJK S2, Dandadan) continue to episode-filter correctly with zero regression.
+
+### Known limitation
+
+- Movie/OVA searches can now surface releases from related shows that share the franchise name but are different AniList entries. Example: a Vampire Hunter D: Bloodlust (2000) search will also return the Vampire Hunter D (1985) original and Vampire Hunter: Night Warriors (Darkstalkers) releases because they share the tokens "vampire" and "hunter". This was already the case for series in some scenarios (like the earlier Dandadan / Circus-dan collision), and it's more noticeable now that movies actually return results. Requires a distinctive-token detection layer beyond simple token overlap. Deferred to a future release.
+
 ## [1.6.5] - 2026-07-08 (stable)
 
 Per-source bumps: `nyaa 1.0.17`, `animetosho 1.0.10`, `subsplease 1.0.8`, `yameii 1.0.14`, `toonshub 1.0.11`. Seadex unchanged.

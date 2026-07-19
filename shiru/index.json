@@ -2,7 +2,7 @@
   {
     "name": "Nyaa",
     "id": "anitorrent.nyaa",
-    "version": "1.0.17",
+    "version": "1.0.18",
     "type": "torrent",
     "accuracy": "medium",
     "ratio": 0,
@@ -16,7 +16,7 @@
   {
     "name": "AnimeTosho",
     "id": "anitorrent.animetosho",
-    "version": "1.0.10",
+    "version": "1.0.11",
     "type": "torrent",
     "accuracy": "high",
     "ratio": 0,
@@ -44,7 +44,7 @@
   {
     "name": "SubsPlease",
     "id": "anitorrent.subsplease",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "type": "torrent",
     "accuracy": "high",
     "ratio": 0,
@@ -58,7 +58,7 @@
   {
     "name": "Yameii (Dubs)",
     "id": "anitorrent.yameii",
-    "version": "1.0.14",
+    "version": "1.0.15",
     "type": "torrent",
     "accuracy": "high",
     "ratio": 0,
@@ -72,7 +72,7 @@
   {
     "name": "ToonsHub",
     "id": "anitorrent.toonshub",
-    "version": "1.0.11",
+    "version": "1.0.12",
     "type": "torrent",
     "accuracy": "high",
     "ratio": 0,

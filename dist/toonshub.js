@@ -426,6 +426,7 @@ async function runSearch(query, opts) {
 }
 var toonshub_default = new class ToonsHub {
   async single(query) {
+    if (query.episodeCount === 1) return runSearch(query, { movie: true });
     return runSearch(query, { episode: query.episode });
   }
   async batch(query) {

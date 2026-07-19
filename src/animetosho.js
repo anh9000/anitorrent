@@ -181,7 +181,10 @@ async function search (query, mode) {
 }
 
 export default new class AnimeTosho {
-  async single (query) { return search(query, 'single') }
+  async single (query) {
+    if (query.episodeCount === 1) return search(query, 'movie')
+    return search(query, 'single')
+  }
   async batch (query) { return search(query, 'batch') }
   async movie (query) { return search(query, 'movie') }
 

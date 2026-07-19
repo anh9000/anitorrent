@@ -335,6 +335,7 @@ async function runSearch(query, mode) {
 }
 var subsplease_default = new class SubsPlease {
   async single(query) {
+    if (query.episodeCount === 1) return runSearch(query, "movie");
     return runSearch(query, "single");
   }
   async batch(query) {

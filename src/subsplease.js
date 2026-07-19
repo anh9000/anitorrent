@@ -164,7 +164,10 @@ async function runSearch (query, mode) {
 }
 
 export default new class SubsPlease {
-  async single (query) { return runSearch(query, 'single') }
+  async single (query) {
+    if (query.episodeCount === 1) return runSearch(query, 'movie')
+    return runSearch(query, 'single')
+  }
   async batch (query) { return runSearch(query, 'batch') }
   async movie (query) { return runSearch(query, 'movie') }
 
