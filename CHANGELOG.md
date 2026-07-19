@@ -4,6 +4,14 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.7] - 2026-07-19 (stable)
+
+Per-source bumps: `nyaa 1.0.19`, `animetosho 1.0.12`, `subsplease 1.0.10`, `yameii 1.0.16`, `toonshub 1.0.13`. Seadex unchanged.
+
+### Fixed
+
+- **Franchise-sibling leaks with different release years.** After v1.6.6 fixed movies to actually return results, wrong-franchise leaks became visible: a Vampire Hunter D: Bloodlust (2000) search would return the 1985 original Vampire Hunter D and the 1997 Vampire Hunter: Night Warriors (Darkstalkers) OVA releases too, because they share the `vampire` and `hunter` tokens. Cleanly fixable when AniList carries the year in the show's own title (which is common: "Vampire Hunter D (2000)", "Hunter x Hunter (2011)"). Each source now detects any 4-digit year in the show's title set and rejects results whose filename carries a *different* year. Results with no year at all still pass (movie releases often omit year in the filename). Shows with no year in any of their titles get no year check at all, so this doesn't touch typical series matching. For VHD: Bloodlust the wrong-franchise leak dropped from 18 results to 2 (the 2 remaining are Night Warriors releases with no year info anywhere, a distinctive-token problem beyond year filtering). Zero regressions across curated + offline suites (0 self-match failures, 0.215% contamination, 6 movies + 6 series all clean).
+
 ## [1.6.6] - 2026-07-11 (stable)
 
 Per-source bumps: `nyaa 1.0.18`, `animetosho 1.0.11`, `subsplease 1.0.9`, `yameii 1.0.15`, `toonshub 1.0.12`. Seadex unchanged.

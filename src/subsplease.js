@@ -1,7 +1,7 @@
 import {
   buildTitleTokens, resultMatchesShow, trimTitleForQuery,
   rankTitlesForQuery, matchesResolution, hitsExclusion,
-  detectShowSeason, resultMatchesSeason
+  detectShowSeason, resultMatchesSeason, detectShowYears, resultMatchesYear
 } from './lib/shared.js'
 
 const BASE = 'https://subsplease.org/api/'
@@ -104,6 +104,7 @@ async function runSearch (query, mode) {
 
   const showTokens = buildTitleTokens(query.titles)
   const showSeason = detectShowSeason(query.titles)
+  const showYears = detectShowYears(query.titles)
   const exclusions = query.exclusions || []
   const resolution = query.resolution || ''
   const ordered = rankTitlesForQuery(query.titles).slice(0, 3)
@@ -132,6 +133,7 @@ async function runSearch (query, mode) {
   let filtered = entries
     .filter(e => resultMatchesShow(e.key, showTokens, showTokens.size >= 3 ? 2 : 1))
     .filter(e => resultMatchesSeason(e.key, showSeason))
+    .filter(e => resultMatchesYear(e.key, showYears))
 
   if (mode === 'single') {
     filtered = filtered.filter(e => !isBatchEntry(e) && episodeMatches(e.episode, query.episode))

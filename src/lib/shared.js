@@ -187,6 +187,39 @@ export function resultMatchesSeason (title, showSeason) {
   return !rs || rs === 1
 }
 
+// Year detection — used to disambiguate franchise siblings released in
+// different years. AniList often puts the year in the show's title itself
+// ("Vampire Hunter D (2000)", "Hunter x Hunter (2011)"), and release filenames
+// commonly include the year too ("Vampire.Hunter.D.1985.1080p..."). If the
+// show's own titles carry a year, we require any result that ALSO carries a
+// year to share it. Results with no year at all still pass (movie releases
+// often omit year in the filename). Shows with no year get no year check at
+// all, so this doesn't touch typical series matching.
+const YEAR_RE = /(?:^|[\s._\[(\-])(19[3-9]\d|20\d{2})(?=[\s._\])\-]|$)/g
+
+export function detectYears (text) {
+  const s = String(text || '')
+  const years = new Set()
+  YEAR_RE.lastIndex = 0
+  let m
+  while ((m = YEAR_RE.exec(s)) !== null) years.add(m[1])
+  return years
+}
+
+export function detectShowYears (titles) {
+  const years = new Set()
+  for (const t of titles || []) for (const y of detectYears(t)) years.add(y)
+  return years
+}
+
+export function resultMatchesYear (title, showYears) {
+  if (!showYears || !showYears.size) return true
+  const rYears = detectYears(title)
+  if (!rYears.size) return true
+  for (const y of rYears) if (showYears.has(y)) return true
+  return false
+}
+
 export function titleHasEpisode (title, ep) {
   if (ep == null) return true
   const n = String(ep).replace(/^0+/, '') || '0'

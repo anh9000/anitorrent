@@ -2,7 +2,7 @@ import {
   buildTitleTokens, resultMatchesShow, titleHasEpisode, looksLikeBatch,
   trimTitleForQuery, rankTitlesForQuery, pad, matchesResolution,
   hitsExclusion, buildMagnet, parseSize, pickTag, pickItems, httpGet, checkNyaaFeed,
-  detectShowSeason, resultMatchesSeason
+  detectShowSeason, resultMatchesSeason, detectShowYears, resultMatchesYear
 } from './lib/shared.js'
 
 const NYAA_BASE = 'https://nyaa.si'
@@ -109,6 +109,7 @@ async function runSearch (query, opts) {
   const resolution = query.resolution || ''
   const showTokens = buildTitleTokens(query.titles)
   const showSeason = detectShowSeason(query.titles)
+  const showYears = detectShowYears(query.titles)
   const seen = new Set()
   const results = []
 
@@ -129,6 +130,7 @@ async function runSearch (query, opts) {
         if (seen.has(r.hash)) continue
         if (!resultMatchesShow(r.title, showTokens)) continue
         if (!resultMatchesSeason(r.title, showSeason)) continue
+        if (!resultMatchesYear(r.title, showYears)) continue
         if (opts.episode != null && !opts.batch && !opts.movie && !titleHasEpisode(r.title, opts.episode)) continue
         seen.add(r.hash)
         results.push(r)

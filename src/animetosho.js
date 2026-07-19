@@ -1,7 +1,7 @@
 import {
   buildTitleTokens, resultMatchesShow, titleHasEpisode, looksLikeBatch,
   trimTitleForQuery, rankTitlesForQuery, matchesResolution, hitsExclusion,
-  detectShowSeason, resultMatchesSeason
+  detectShowSeason, resultMatchesSeason, detectShowYears, resultMatchesYear
 } from './lib/shared.js'
 
 const BASE = 'https://feed.animetosho.org/json'
@@ -133,11 +133,12 @@ async function fetchByText (titles) {
   return [...seen.values()]
 }
 
-function filterAndShape (raw, query, mode, showTokens, exclusions, minHits, showSeason) {
+function filterAndShape (raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears) {
   let out = dedupe(raw)
     .filter(r => !hitsExclusion(r.title, exclusions))
     .filter(r => resultMatchesShow(r.title, showTokens, minHits))
     .filter(r => resultMatchesSeason(r.title, showSeason))
+    .filter(r => resultMatchesYear(r.title, showYears))
 
   if (mode === 'single' && query.episode != null) {
     out = out.filter(r => titleHasEpisode(r.title, query.episode))
@@ -159,6 +160,7 @@ async function search (query, mode) {
   const resolution = query.resolution || ''
   const showTokens = buildTitleTokens(query.titles || [])
   const showSeason = detectShowSeason(query.titles || [])
+  const showYears = detectShowYears(query.titles || [])
   const minHits = showTokens.size >= 3 ? 2 : 1
   const resolvedAid = await resolveAnidbAid(query)
 
@@ -170,11 +172,11 @@ async function search (query, mode) {
     try { raw = await fetchByAid(resolvedAid) } catch (_) { raw = [] }
   }
 
-  let results = filterAndShape(raw, query, mode, showTokens, exclusions, minHits, showSeason)
+  let results = filterAndShape(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears)
 
   if (!results.length && (query.titles || []).length) {
     const textRaw = await fetchByText(query.titles)
-    results = filterAndShape(textRaw, query, mode, showTokens, exclusions, minHits, showSeason)
+    results = filterAndShape(textRaw, query, mode, showTokens, exclusions, minHits, showSeason, showYears)
   }
 
   return rank(results, resolution).slice(0, 30)

@@ -118,6 +118,27 @@ function resultMatchesSeason(title, showSeason) {
   if (showSeason > 1) return rs === showSeason;
   return !rs || rs === 1;
 }
+var YEAR_RE = /(?:^|[\s._\[(\-])(19[3-9]\d|20\d{2})(?=[\s._\])\-]|$)/g;
+function detectYears(text) {
+  const s = String(text || "");
+  const years = /* @__PURE__ */ new Set();
+  YEAR_RE.lastIndex = 0;
+  let m;
+  while ((m = YEAR_RE.exec(s)) !== null) years.add(m[1]);
+  return years;
+}
+function detectShowYears(titles) {
+  const years = /* @__PURE__ */ new Set();
+  for (const t of titles || []) for (const y of detectYears(t)) years.add(y);
+  return years;
+}
+function resultMatchesYear(title, showYears) {
+  if (!showYears || !showYears.size) return true;
+  const rYears = detectYears(title);
+  if (!rYears.size) return true;
+  for (const y of rYears) if (showYears.has(y)) return true;
+  return false;
+}
 var GENERIC_QUERY_WORDS = /* @__PURE__ */ new Set([
   "monster",
   "level",
@@ -282,6 +303,7 @@ async function runSearch(query, mode) {
   if (!query || !query.titles || !query.titles.length) return [];
   const showTokens = buildTitleTokens(query.titles);
   const showSeason = detectShowSeason(query.titles);
+  const showYears = detectShowYears(query.titles);
   const exclusions = query.exclusions || [];
   const resolution = query.resolution || "";
   const ordered = rankTitlesForQuery(query.titles).slice(0, 3);
@@ -305,7 +327,7 @@ async function runSearch(query, mode) {
     }
     if (entries.length >= 50) break;
   }
-  let filtered = entries.filter((e) => resultMatchesShow(e.key, showTokens, showTokens.size >= 3 ? 2 : 1)).filter((e) => resultMatchesSeason(e.key, showSeason));
+  let filtered = entries.filter((e) => resultMatchesShow(e.key, showTokens, showTokens.size >= 3 ? 2 : 1)).filter((e) => resultMatchesSeason(e.key, showSeason)).filter((e) => resultMatchesYear(e.key, showYears));
   if (mode === "single") {
     filtered = filtered.filter((e) => !isBatchEntry(e) && episodeMatches(e.episode, query.episode));
   } else if (mode === "batch") {
