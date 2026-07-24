@@ -10,7 +10,7 @@ Per-source bumps: `nyaa 1.0.20`, `animetosho 1.0.13`, `subsplease 1.0.11`, `yame
 
 ### Fixed
 
-- **Season 2 releases were still leaking into Season 1 searches when release groups used the space-separated marker.** The season detector's regex only caught the combined `SxxExx` form (like `S02E01`) and missed the more common release-group convention `S2 - 08` (season and episode as separate parts). So a search for Mushoku Tensei S1 episode 8 was surfacing 3 Mushoku Tensei S2 episode 8 releases from SubsPlease and ASW alongside the S1 results. Regex now catches both forms: `S<num>E<num>` combined AND `S<num>` standalone at a word boundary. Verified across Mushoku Tensei (S2 leaks dropped 3 -> 0), Kimetsu no Yaiba `S02E01`, Bleach `S17E01`, and Attack on Titan `Season 3` — all detect correctly. No regressions on the offline 297-show suite.
+- **Season 2 releases were still leaking into Season 1 searches when release groups used the space-separated marker.** The season detector's regex only caught the combined `SxxExx` form (like `S02E01`) and missed the more common release-group convention `S2 - 08` (season and episode as separate parts). So a search for Mushoku Tensei S1 episode 8 was surfacing 3 Mushoku Tensei S2 episode 8 releases from SubsPlease and ASW alongside the S1 results. Regex now catches both forms: `S<num>E<num>` combined AND `S<num>` standalone at a word boundary. Verified across Mushoku Tensei (S2 leaks dropped 3 -> 0), Kimetsu no Yaiba `S02E01`, Bleach `S17E01`, and Attack on Titan `Season 3`. All detect correctly. No regressions on the offline 297-show suite.
 
 ## [1.6.7] - 2026-07-19 (stable)
 
