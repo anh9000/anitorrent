@@ -141,8 +141,12 @@ const ROMAN_SEASON = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9
 // a torrent result title, so the two can be compared.
 export function detectResultSeason (title) {
   const t = String(title || '')
-  // "S02E01" / "S2E1"
-  let m = t.match(/\bS(\d{1,2})E\d/i)
+  // "S02E01" (combined) OR "S2 - 08" / "S02" (season marker alone, no episode
+  // appended). Release groups use BOTH conventions: SubsPlease writes "S2 - 08"
+  // and Erai-raws writes similar, while many BD groups write "S02E01". The
+  // earlier regex only caught the SxxExx form and missed the space-separated
+  // one, leaking Season 2 releases into Season 1 searches.
+  let m = t.match(/\bS(\d{1,2})(?:E\d|\b)/i)
   if (m) return parseInt(m[1], 10)
   // "Season 2" / "2nd Season" / "3rd Season" / "4th Season"
   m = t.match(/\b(?:Season\s+(\d+)|(\d+)(?:st|nd|rd|th)\s+Season)\b/i)
