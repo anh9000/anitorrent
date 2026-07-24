@@ -453,7 +453,7 @@ var yameii_default = new class Yameii {
   }
   async batch(query) {
     const results = await runSearch(query, { batch: true });
-    return results.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch" }));
+    return results.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch", accuracy: "low" }));
   }
   async movie(query) {
     return runSearch(query, { movie: true });

@@ -356,7 +356,7 @@ function filterAndShape(raw, query, mode, showTokens, exclusions, minHits, showS
     out = out.filter((r) => titleHasEpisode(r.title, query.episode));
   }
   if (mode === "batch") {
-    out = out.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch" }));
+    out = out.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch", accuracy: "low" }));
   }
   return out;
 }

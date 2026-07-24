@@ -92,7 +92,7 @@ function entryToResults (entry, opts) {
       downloads: 0,
       size,
       date,
-      accuracy: 'high',
+      accuracy: opts.batch ? 'low' : 'high',
       type: opts.batch ? 'batch' : undefined
     })
   }

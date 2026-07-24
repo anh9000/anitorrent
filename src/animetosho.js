@@ -147,7 +147,7 @@ function filterAndShape (raw, query, mode, showTokens, exclusions, minHits, show
   if (mode === 'batch') {
     out = out
       .filter(r => looksLikeBatch(r.title))
-      .map(r => ({ ...r, type: 'batch' }))
+      .map(r => ({ ...r, type: 'batch', accuracy: 'low' }))
   }
 
   return out

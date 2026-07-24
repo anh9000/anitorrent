@@ -4,6 +4,14 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.9] - 2026-07-24 (stable)
+
+Per-source bumps: `nyaa 1.0.21`, `animetosho 1.0.14`, `subsplease 1.0.12`, `yameii 1.0.18`, `toonshub 1.0.15`. Seadex unchanged.
+
+### Changed
+
+- **Batch results now sort BELOW single-episode results in the picker.** Hayase groups results by the per-result `accuracy` field (`high` > `medium` > `low`) before sorting by seeders inside each group. Previously batch results kept the source's default accuracy tier (`high` for AnimeTosho, `medium` for nyaa), so a season-pack from AnimeTosho would appear above a specific single-episode release from nyaa in the picker even when the user was resuming a particular episode. Every batch result returned from `batch()` in each source now carries `accuracy: 'low'` explicitly, pushing all batches to their own tier below every single. Seadex's curated "best release" results are unaffected because they come through with `type: 'best'` from a different code path and keep their `high` accuracy. Users who prefer batches can still find them lower in the picker; users resuming a specific episode see the correct single first.
+
 ## [1.6.8] - 2026-07-19 (stable)
 
 Per-source bumps: `nyaa 1.0.20`, `animetosho 1.0.13`, `subsplease 1.0.11`, `yameii 1.0.17`, `toonshub 1.0.14`. Seadex unchanged.

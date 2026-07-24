@@ -156,7 +156,12 @@ export default new class Nyaa {
     const results = await runSearch(query, { batch: true })
     return results
       .filter(r => looksLikeBatch(r.title))
-      .map(r => ({ ...r, type: 'batch' }))
+      // Batches get accuracy: 'low' so Hayase's tier grouping puts them below
+      // single-episode results. Users resuming a specific episode almost always
+      // want the single-episode release, not a season pack. Seadex's curated
+      // "best release" tag comes through type: 'best' from a different path and
+      // is unaffected — those stay at their normal tier.
+      .map(r => ({ ...r, type: 'batch', accuracy: 'low' }))
   }
 
   async movie (query) {

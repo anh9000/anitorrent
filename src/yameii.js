@@ -152,7 +152,7 @@ export default new class Yameii {
     const results = await runSearch(query, { batch: true })
     return results
       .filter(r => looksLikeBatch(r.title))
-      .map(r => ({ ...r, type: 'batch' }))
+      .map(r => ({ ...r, type: 'batch', accuracy: 'low' }))
   }
 
   async movie (query) {
