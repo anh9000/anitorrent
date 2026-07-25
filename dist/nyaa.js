@@ -315,14 +315,14 @@ function shapeAll(items, ctx, sourceDefault) {
   };
   const exact = shape({ ...ctx, episodeCandidates: null });
   if (!ctx.episodeCandidates || ctx.episodeCandidates.size <= 1) return exact;
-  const offsetOnly = new Set(ctx.episodeCandidates);
-  offsetOnly.delete(ctx.episode);
-  if (!offsetOnly.size) return exact;
-  const newestExact = newestOf(exact);
-  const newestOffset = newestOf(shape({ ...ctx, episodeCandidates: offsetOnly }));
-  if (newestOffset == null) return exact;
-  if (newestExact != null && newestExact >= newestOffset) return exact;
-  return shape(ctx);
+  let best = null;
+  for (const n of ctx.episodeCandidates) {
+    const shaped = shape({ ...ctx, episodeCandidates: /* @__PURE__ */ new Set([n]) });
+    const newest = newestOf(shaped);
+    if (newest == null) continue;
+    if (!best || newest > best.newest) best = { newest, shaped };
+  }
+  return best ? best.shaped : exact;
 }
 function newestOf(results) {
   let newest = null;
@@ -348,7 +348,8 @@ function sortResults(results, resolution) {
   });
 }
 function finalize(results, resolution, limit = 30) {
-  return sortResults(results, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest);
+  const kept = results.some((r) => r._tier === "A") ? results.filter((r) => r._tier !== "C") : results;
+  return sortResults(kept, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest);
 }
 async function withEpisodeCandidates(query) {
   try {

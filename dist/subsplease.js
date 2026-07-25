@@ -269,7 +269,8 @@ function sortResults(results, resolution) {
   });
 }
 function finalize(results, resolution, limit = 30) {
-  return sortResults(results, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest);
+  const kept = results.some((r) => r._tier === "A") ? results.filter((r) => r._tier !== "C") : results;
+  return sortResults(kept, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest);
 }
 async function withEpisodeCandidates(query) {
   try {

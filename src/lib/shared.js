@@ -402,15 +402,19 @@ export function shapeAll (items, ctx, sourceDefault) {
   const exact = shape({ ...ctx, episodeCandidates: null })
   if (!ctx.episodeCandidates || ctx.episodeCandidates.size <= 1) return exact
 
-  const offsetOnly = new Set(ctx.episodeCandidates)
-  offsetOnly.delete(ctx.episode)
-  if (!offsetOnly.size) return exact
-
-  const newestExact = newestOf(exact)
-  const newestOffset = newestOf(shape({ ...ctx, episodeCandidates: offsetOnly }))
-  if (newestOffset == null) return exact
-  if (newestExact != null && newestExact >= newestOffset) return exact
-  return shape(ctx)
+  // Only one candidate can be right. Each cour boundary in the chain produces
+  // one, so The Calamity ep 1 could read as 1, 15, 28, 41 or 407, and accepting
+  // all of them let a two-year-old ep 28 sit beside today's ep 41. Score each
+  // on its own and keep the single freshest: the episode being asked for is the
+  // one that was just uploaded.
+  let best = null
+  for (const n of ctx.episodeCandidates) {
+    const shaped = shape({ ...ctx, episodeCandidates: new Set([n]) })
+    const newest = newestOf(shaped)
+    if (newest == null) continue
+    if (!best || newest > best.newest) best = { newest, shaped }
+  }
+  return best ? best.shaped : exact
 }
 
 function newestOf (results) {
@@ -441,8 +445,15 @@ export function sortResults (results, resolution) {
   })
 }
 
+// Title-only matches are dropped once a real episode match exists: they are
+// other episodes of the same show, which is noise when a specific one was
+// asked for. They are kept only when nothing matched, where an approximate
+// list still beats an empty picker.
 export function finalize (results, resolution, limit = 30) {
-  return sortResults(results, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest)
+  const kept = results.some(r => r._tier === 'A')
+    ? results.filter(r => r._tier !== 'C')
+    : results
+  return sortResults(kept, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest)
 }
 
 // Attach absolute-numbering candidates so per-cour entries match the filenames

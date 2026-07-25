@@ -4,9 +4,9 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
-## [1.6.12] - 2026-07-25 (stable)
+## [1.6.13] - 2026-07-25 (stable)
 
-Per-source bumps: `nyaa 1.0.24`, `animetosho 1.0.17`, `subsplease 1.0.15`, `yameii 1.0.21`, `toonshub 1.0.18`. Seadex unchanged. Consolidates all of today work; supersedes v1.6.10 and v1.6.11.
+Per-source bumps: `nyaa 1.0.25`, `animetosho 1.0.18`, `subsplease 1.0.16`, `yameii 1.0.22`, `toonshub 1.0.19`. Seadex unchanged. Consolidates all of today work; supersedes v1.6.10 through v1.6.12.
 
 ### Fixed
 
@@ -21,6 +21,8 @@ Per-source bumps: `nyaa 1.0.24`, `animetosho 1.0.17`, `subsplease 1.0.15`, `yame
 - **Episode-numbered queries are built from every title, not just the first.** Feeds only return their most recent page, so an older episode is invisible to a plain title search. The lookup existed but was built from the romaji title only: "meitantei conan 1100" finds nothing while "detective conan 1100" finds the episode. Detective Conan ep 1100 went from 0 results to 30.
 
 - **Results are ordered newest-first within relevance.** Each result is tiered as an exact episode match, a batch containing it, or a title-only match. Exact matches lead when any exist; otherwise everything sorts by upload date, matching how nyaa orders its own search page. Accuracy is also age-aware, so a fresh upload is never buried under a years-old pack.
+
+- **Unrelated episodes are hidden.** Two changes. The prequel chain produces one candidate per cour boundary, so The Calamity ep 1 could read as 1, 15, 28, 41 or 407, and accepting all of them left a two-year-old ep 28 sitting beside today's ep 41. Only the single freshest candidate is kept now. On top of that, once a real episode match exists, title-only matches are dropped instead of padding the list: they are other episodes of the same show, which is noise when a specific one was asked for. They are still shown when nothing matched, where an approximate list beats an empty picker. Measured across 8 shows the picker is now 100% correct-episode for 7 of them and 90% for the eighth.
 
 ### Changed
 
