@@ -313,6 +313,36 @@ export function pad (n) {
   return s.length < 2 ? '0' + s : s
 }
 
+// Tier a token-matched result for picker ordering. Mirrors the way nyaa's own
+// search behaves (date-desc within relevance tiers) so per-cour AniList entries
+// like BLEACH: The Calamity surface today's E41 uploads at the top instead of
+// being buried under 2-year-old batches whose range happens to contain "01".
+//
+// Returns null if the result should not appear at all (token or exclusion fail).
+// Returns 'A' | 'B' | 'C' where A ranks first:
+//   A = passes season+year AND (single-episode match | movie mode | batch mode)
+//   B = passes season+year but is a batch containing the requested ep in single mode
+//   C = token-only match (season/year/episode mismatch) - fallback
+export function classifyResult (title, opts) {
+  const showTokens = opts.showTokens
+  const minHits = opts.minHits != null ? opts.minHits : (showTokens && showTokens.size >= 3 ? 2 : 1)
+  if (!resultMatchesShow(title, showTokens, minHits)) return null
+  const seasonOk = resultMatchesSeason(title, opts.showSeason)
+  const yearOk = resultMatchesYear(title, opts.showYears)
+  const isBatch = looksLikeBatch(title)
+  if (opts.mode === 'batch') {
+    return (seasonOk && yearOk && isBatch) ? 'A' : 'C'
+  }
+  if (opts.mode === 'movie') {
+    return (seasonOk && yearOk) ? 'A' : 'C'
+  }
+  const epOk = opts.episode == null || titleHasEpisode(title, opts.episode)
+  if (seasonOk && yearOk && epOk) {
+    return isBatch ? 'B' : 'A'
+  }
+  return 'C'
+}
+
 export function matchesResolution (title, resolution) {
   if (!resolution) return true
   return title.includes(resolution + 'p') || title.includes(resolution)

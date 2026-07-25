@@ -1,4 +1,11 @@
 // src/lib/shared.js
+var BATCH_PATTERNS = [
+  /\bbatch\b/i,
+  /\bcomplete\b/i,
+  /\bseason\s*\d+\b/i,
+  /\bs\d{1,2}\b(?!\s*e\d)/i,
+  /\b\d{1,3}\s*[-~]\s*\d{1,3}\b/
+];
 var STOPWORDS = /* @__PURE__ */ new Set([
   "the",
   "and",
@@ -144,6 +151,21 @@ function resultMatchesYear(title, showYears) {
   for (const y of rYears) if (showYears.has(y)) return true;
   return false;
 }
+function titleHasEpisode(title, ep) {
+  if (ep == null) return true;
+  const n = String(ep).replace(/^0+/, "") || "0";
+  const patterns = [
+    new RegExp("\\b(?:e|ep|episode\\s*|s\\d{1,2}e)0*" + n + "\\b(?!\\d)", "i"),
+    new RegExp("[\\s._][-~]\\s+0*" + n + "(?:v\\d)?(?=[\\s\\[\\(]|$)", "i"),
+    new RegExp("[\\[\\(]0*" + n + "(?:v\\d)?[\\]\\)]", "i")
+  ];
+  return patterns.some((re) => re.test(title));
+}
+function looksLikeBatch(title) {
+  if (/\bs\d{1,2}e\d{1,3}\b/i.test(title)) return false;
+  if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false;
+  return BATCH_PATTERNS.some((re) => re.test(title));
+}
 var GENERIC_QUERY_WORDS = /* @__PURE__ */ new Set([
   "monster",
   "level",
@@ -204,6 +226,25 @@ function rankTitlesForQuery(titles) {
   const latin = list.filter((x) => x.asciiRatio >= 0.5);
   const pool = latin.length ? latin : list;
   return pool.sort((a, b) => a.degenerate - b.degenerate || a.i - b.i).map((x) => x.t);
+}
+function classifyResult(title, opts) {
+  const showTokens = opts.showTokens;
+  const minHits = opts.minHits != null ? opts.minHits : showTokens && showTokens.size >= 3 ? 2 : 1;
+  if (!resultMatchesShow(title, showTokens, minHits)) return null;
+  const seasonOk = resultMatchesSeason(title, opts.showSeason);
+  const yearOk = resultMatchesYear(title, opts.showYears);
+  const isBatch = looksLikeBatch(title);
+  if (opts.mode === "batch") {
+    return seasonOk && yearOk && isBatch ? "A" : "C";
+  }
+  if (opts.mode === "movie") {
+    return seasonOk && yearOk ? "A" : "C";
+  }
+  const epOk = opts.episode == null || titleHasEpisode(title, opts.episode);
+  if (seasonOk && yearOk && epOk) {
+    return isBatch ? "B" : "A";
+  }
+  return "C";
 }
 function matchesResolution(title, resolution) {
   if (!resolution) return true;
@@ -289,6 +330,7 @@ function entryToResults(entry, opts) {
     const res = dl.res ? dl.res + "p" : "";
     const title = "[SubsPlease] " + entry.key + (res ? " (" + res + ")" : "");
     if (hitsExclusion(title, opts.exclusions)) continue;
+    const accuracy = opts.batch ? "low" : opts.tier === "A" ? "high" : "low";
     out.push({
       title,
       link: dl.magnet,
@@ -298,8 +340,8 @@ function entryToResults(entry, opts) {
       downloads: 0,
       size,
       date,
-      accuracy: opts.batch ? "low" : "high",
-      type: opts.batch ? "batch" : void 0
+      accuracy,
+      type: opts.batch ? "batch" : opts.tier === "B" ? "batch" : void 0
     });
   }
   return out;
@@ -311,13 +353,19 @@ async function runSearch(query, mode) {
   const showYears = detectShowYears(query.titles);
   const exclusions = query.exclusions || [];
   const resolution = query.resolution || "";
-  const ordered = rankTitlesForQuery(query.titles).slice(0, 3);
   const seenHashes = /* @__PURE__ */ new Set();
   const seenKeys = /* @__PURE__ */ new Set();
   const entries = [];
-  for (const title of ordered) {
+  const queries = [];
+  const seenQueries = /* @__PURE__ */ new Set();
+  for (const title of rankTitlesForQuery(query.titles)) {
     const q = trimTitleForQuery(title);
-    if (!q) continue;
+    if (!q || seenQueries.has(q)) continue;
+    seenQueries.add(q);
+    queries.push(q);
+    if (queries.length >= 3) break;
+  }
+  for (const q of queries) {
     let batch;
     try {
       batch = await searchApi(q);
@@ -332,30 +380,26 @@ async function runSearch(query, mode) {
     }
     if (entries.length >= 50) break;
   }
-  const candidates = entries.filter((e) => resultMatchesShow(e.key, showTokens, showTokens.size >= 3 ? 2 : 1));
-  let filtered = candidates.filter((e) => resultMatchesSeason(e.key, showSeason)).filter((e) => resultMatchesYear(e.key, showYears));
-  if (mode === "single") {
-    filtered = filtered.filter((e) => !isBatchEntry(e) && episodeMatches(e.episode, query.episode));
-  } else if (mode === "batch") {
-    filtered = filtered.filter((e) => isBatchEntry(e));
-  } else if (mode === "movie") {
-    filtered = filtered.filter((e) => !isBatchEntry(e));
-  }
-  let fallbackMarked = false;
-  if (mode === "single" && !filtered.length) {
-    filtered = candidates.filter((e) => !isBatchEntry(e));
-    fallbackMarked = true;
-  }
-  const opts = { exclusions, batch: mode === "batch" };
   const out = [];
-  for (const e of filtered) {
-    for (const r of entryToResults(e, opts)) {
+  for (const e of entries) {
+    const tier = classifyResult(e.key, { showTokens, showSeason, showYears, episode: query.episode, mode });
+    if (tier === null) continue;
+    if (mode === "single" && isBatchEntry(e) && tier === "A") continue;
+    if (mode === "batch" && !isBatchEntry(e)) continue;
+    if (mode === "movie" && isBatchEntry(e)) continue;
+    let effectiveTier = tier;
+    if (mode === "single" && isBatchEntry(e)) effectiveTier = "B";
+    if (mode === "single" && !isBatchEntry(e) && tier === "A" && !episodeMatches(e.episode, query.episode)) effectiveTier = "C";
+    const entryOpts = { exclusions, batch: mode === "batch", tier: effectiveTier };
+    for (const r of entryToResults(e, entryOpts)) {
       if (seenHashes.has(r.hash)) continue;
       seenHashes.add(r.hash);
-      out.push(fallbackMarked ? { ...r, accuracy: "low" } : r);
+      out.push({ ...r, _tier: effectiveTier });
     }
   }
+  const hasA = out.some((r) => r._tier === "A");
   return out.sort((a, b) => {
+    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1;
     if (resolution) {
       const am = matchesResolution(a.title, resolution) ? 1 : 0;
       const bm = matchesResolution(b.title, resolution) ? 1 : 0;
@@ -364,7 +408,7 @@ async function runSearch(query, mode) {
     const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0);
     if (dt !== 0) return dt;
     return b.size - a.size;
-  }).slice(0, 30);
+  }).slice(0, 30).map(({ _tier, ...rest }) => rest);
 }
 var subsplease_default = new class SubsPlease {
   async single(query) {

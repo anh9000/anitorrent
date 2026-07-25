@@ -4,13 +4,23 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
-## [1.6.10] - 2026-07-25 (stable)
+## [1.6.11] - 2026-07-25 (stable)
 
-Per-source bumps: `nyaa 1.0.22`, `animetosho 1.0.15`, `subsplease 1.0.13`, `yameii 1.0.19`, `toonshub 1.0.16`. Seadex unchanged.
+Per-source bumps: `nyaa 1.0.23`, `animetosho 1.0.16`, `subsplease 1.0.14`, `yameii 1.0.20`, `toonshub 1.0.17`. Seadex unchanged. Consolidates all of today's work; supersedes v1.6.10.
 
 ### Fixed
 
-- **Per-cour AniList entries returned empty pickers.** BLEACH: Thousand-Year Blood War - The Calamity is a fresh case: AniList lists it as a 12-episode entry, but release groups number files continuously across the whole Sennen Kessen-hen arc, so ep 1 of Calamity is filename ep 41 with an S17 marker. Nothing was matching. Two compounding bugs, both fixed. First, the season detector was treating the synonym `Part 4` as season 4 (via the trailing-digit rule), so every actual S17/no-season release was rejected on the season filter. `Part N` is ambiguous in anime naming (sometimes a season number, sometimes a cour within a season) and the detector now skips it entirely. Second, when strict filters (season/year/episode) returned zero results, each source returned an empty array. All five sources (`nyaa`, `animetosho`, `subsplease`, `yameii`, `toonshub`) now keep the token-matched results as a fallback layer tagged `accuracy: 'low'` so Hayase's picker shows *something* to pick from instead of "No results found". Verified: BLEACH TYBW: The Calamity ep 1 went from 0 results to 30 across nyaa alone, with zero cross-franchise contamination on the offline 297-show suite.
+- **Per-cour AniList entries picker was showing wrong-cour stale batches instead of the currently-airing episode.** BLEACH: Thousand-Year Blood War - The Calamity is the fresh case: AniList lists it as a 10-episode entry, but release groups number files continuously across the whole Sennen Kessen-hen arc, so ep 1 of Calamity is filename ep 41 with an S17 marker. Three compounding bugs across the pipeline, all fixed in this release.
+
+- The season detector was reading the synonym `Part 4` as season 4 (trailing-digit rule) and rejecting every S17 or unmarked release on the season filter. `Part N` is ambiguous in anime naming (sometimes a season number, sometimes a cour within a season) and the detector now skips it entirely.
+
+- Nyaa's search was being polluted by an internal query variant that appended the episode number (`base + ' 01'`) as a second search term. On short-name shows like Bleach, that variant pulled in stale ep-01 uploads from previous cours or seasons which happened to match the episode filter, giving false-positive strict results that hid the actual current episode from the picker. Removed the episode-suffixed variant; nyaa's default date-desc sort on the base query is a more honest source of "what is available now".
+
+- Query building was also generating duplicate search calls when multiple AniList titles all collapsed to the same trimmed query. Dedupe now applied so up to three DISTINCT queries are sent per source instead of the same one twice.
+
+- Result ranking rewritten. Each source now classifies every token-matched result into three tiers: exact single-episode match (top), batch containing the requested episode (middle), token-only match (bottom). When any exact match exists the tiers are honored; when none exist (per-cour entries where episode numbering does not align) all results sort by upload date descending. This is the same ordering nyaa itself uses on its site so users see today's episode uploads first instead of 491-day-old cour batches.
+
+- Verified: BLEACH TYBW: The Calamity ep 1 went from empty picker → wrong-cour stale batches → **actual today's ep-41 uploads at the top** (Lazier, DKB, Judas, VARYG AMZN, ToonsHub, AnoZu). Regression suite: 297-show offline test at 0.215% cross-franchise noise (identical baseline). Live tested: One Piece ep 1100, Frieren ep 8, Mushoku Tensei S1 ep 8 (S2-leak fix still intact), Dandadan ep 1, Vampire Hunter D: Bloodlust movie mode. All clean.
 
 ## [1.6.9] - 2026-07-24 (stable)
 

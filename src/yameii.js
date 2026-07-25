@@ -1,8 +1,8 @@
 import {
-  buildTitleTokens, resultMatchesShow, titleHasEpisode, looksLikeBatch,
+  buildTitleTokens, looksLikeBatch,
   trimTitleForQuery, rankTitlesForQuery, matchesResolution,
   hitsExclusion, buildMagnet, parseSize, pickTag, pickItems, httpGet, checkNyaaFeed,
-  detectShowSeason, resultMatchesSeason, detectShowYears, resultMatchesYear
+  detectShowSeason, detectShowYears, classifyResult
 } from './lib/shared.js'
 
 const NYAA_BASE = 'https://nyaa.si'
@@ -83,8 +83,10 @@ function itemToResult (raw, opts) {
   }
 }
 
-function rankResults (results, resolution) {
+function sortResults (results, resolution) {
+  const hasA = results.some(r => r._tier === 'A')
   return results.sort((a, b) => {
+    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1
     if (resolution) {
       const am = matchesResolution(a.title, resolution) ? 1 : 0
       const bm = matchesResolution(b.title, resolution) ? 1 : 0
@@ -96,12 +98,6 @@ function rankResults (results, resolution) {
   })
 }
 
-function queryVariantsForTitle (title) {
-  const base = trimTitleForQuery(title)
-  if (!base) return []
-  return [base]
-}
-
 async function runSearch (query, opts) {
   if (!query.titles || !query.titles.length) return []
 
@@ -110,47 +106,43 @@ async function runSearch (query, opts) {
   const showTokens = buildTitleTokens(query.titles)
   const showSeason = detectShowSeason(query.titles)
   const showYears = detectShowYears(query.titles)
+  const mode = opts.batch ? 'batch' : (opts.movie ? 'movie' : 'single')
   const seen = new Set()
-  const seenFallback = new Set()
   const results = []
-  const fallback = []
 
-  const titles = rankTitlesForQuery(query.titles).slice(0, 2)
-  for (const title of titles) {
-    const variants = queryVariantsForTitle(title)
-    for (const q of variants) {
-      let items
-      try {
-        items = await rssSearchWithRetry(q)
-      } catch (err) {
-        if (results.length) return rankResults(results, resolution).slice(0, 30)
-        throw err
-      }
-      for (const raw of items) {
-        const r = itemToResult(raw, { exclusions })
-        if (!r) continue
-        if (!resultMatchesShow(r.title, showTokens)) continue
-        const strictOk =
-          resultMatchesSeason(r.title, showSeason) &&
-          resultMatchesYear(r.title, showYears) &&
-          (opts.episode == null || opts.batch || opts.movie || titleHasEpisode(r.title, opts.episode))
-        if (!strictOk) {
-          if (!seenFallback.has(r.hash)) {
-            seenFallback.add(r.hash)
-            fallback.push({ ...r, accuracy: 'low' })
-          }
-          continue
-        }
-        if (seen.has(r.hash)) continue
-        seen.add(r.hash)
-        results.push(r)
-      }
-    }
-    if (results.length >= 10) break
+  const queries = []
+  const seenQueries = new Set()
+  for (const title of rankTitlesForQuery(query.titles)) {
+    const q = trimTitleForQuery(title)
+    if (!q || seenQueries.has(q)) continue
+    seenQueries.add(q)
+    queries.push(q)
+    if (queries.length >= 3) break
   }
 
-  const final = results.length ? results : fallback
-  return rankResults(final, resolution).slice(0, 30)
+  for (const q of queries) {
+    let items
+    try {
+      items = await rssSearchWithRetry(q)
+    } catch (err) {
+      if (results.length) break
+      throw err
+    }
+    for (const raw of items) {
+      const r = itemToResult(raw, { exclusions })
+      if (!r || seen.has(r.hash)) continue
+      const tier = classifyResult(r.title, { showTokens, showSeason, showYears, episode: opts.episode, mode })
+      if (tier === null) continue
+      seen.add(r.hash)
+      const item = { ...r, _tier: tier }
+      if (tier !== 'A') item.accuracy = 'low'
+      if (tier === 'B') item.type = 'batch'
+      results.push(item)
+    }
+    if (results.filter(r => r._tier === 'A').length >= 10) break
+  }
+
+  return sortResults(results, resolution).slice(0, 30).map(({ _tier, ...rest }) => rest)
 }
 
 export default new class Yameii {

@@ -1,7 +1,7 @@
 import {
-  buildTitleTokens, resultMatchesShow, trimTitleForQuery,
+  buildTitleTokens, trimTitleForQuery,
   rankTitlesForQuery, matchesResolution, hitsExclusion,
-  detectShowSeason, resultMatchesSeason, detectShowYears, resultMatchesYear
+  detectShowSeason, detectShowYears, classifyResult
 } from './lib/shared.js'
 
 const BASE = 'https://subsplease.org/api/'
@@ -83,6 +83,7 @@ function entryToResults (entry, opts) {
     const res = dl.res ? dl.res + 'p' : ''
     const title = '[SubsPlease] ' + entry.key + (res ? ' (' + res + ')' : '')
     if (hitsExclusion(title, opts.exclusions)) continue
+    const accuracy = opts.batch ? 'low' : (opts.tier === 'A' ? 'high' : 'low')
     out.push({
       title,
       link: dl.magnet,
@@ -92,8 +93,8 @@ function entryToResults (entry, opts) {
       downloads: 0,
       size,
       date,
-      accuracy: opts.batch ? 'low' : 'high',
-      type: opts.batch ? 'batch' : undefined
+      accuracy,
+      type: opts.batch ? 'batch' : (opts.tier === 'B' ? 'batch' : undefined)
     })
   }
   return out
@@ -107,14 +108,21 @@ async function runSearch (query, mode) {
   const showYears = detectShowYears(query.titles)
   const exclusions = query.exclusions || []
   const resolution = query.resolution || ''
-  const ordered = rankTitlesForQuery(query.titles).slice(0, 3)
   const seenHashes = new Set()
   const seenKeys = new Set()
   const entries = []
 
-  for (const title of ordered) {
+  const queries = []
+  const seenQueries = new Set()
+  for (const title of rankTitlesForQuery(query.titles)) {
     const q = trimTitleForQuery(title)
-    if (!q) continue
+    if (!q || seenQueries.has(q)) continue
+    seenQueries.add(q)
+    queries.push(q)
+    if (queries.length >= 3) break
+  }
+
+  for (const q of queries) {
     let batch
     try {
       batch = await searchApi(q)
@@ -130,41 +138,27 @@ async function runSearch (query, mode) {
     if (entries.length >= 50) break
   }
 
-  const candidates = entries
-    .filter(e => resultMatchesShow(e.key, showTokens, showTokens.size >= 3 ? 2 : 1))
-
-  let filtered = candidates
-    .filter(e => resultMatchesSeason(e.key, showSeason))
-    .filter(e => resultMatchesYear(e.key, showYears))
-
-  if (mode === 'single') {
-    filtered = filtered.filter(e => !isBatchEntry(e) && episodeMatches(e.episode, query.episode))
-  } else if (mode === 'batch') {
-    filtered = filtered.filter(e => isBatchEntry(e))
-  } else if (mode === 'movie') {
-    filtered = filtered.filter(e => !isBatchEntry(e))
-  }
-
-  // Fallback for single mode: if strict returns nothing (per-cour AniList
-  // entries where the episode number does not map to release naming), return
-  // token-matching non-batch entries so user can pick manually.
-  let fallbackMarked = false
-  if (mode === 'single' && !filtered.length) {
-    filtered = candidates.filter(e => !isBatchEntry(e))
-    fallbackMarked = true
-  }
-
-  const opts = { exclusions, batch: mode === 'batch' }
   const out = []
-  for (const e of filtered) {
-    for (const r of entryToResults(e, opts)) {
+  for (const e of entries) {
+    const tier = classifyResult(e.key, { showTokens, showSeason, showYears, episode: query.episode, mode })
+    if (tier === null) continue
+    if (mode === 'single' && isBatchEntry(e) && tier === 'A') continue
+    if (mode === 'batch' && !isBatchEntry(e)) continue
+    if (mode === 'movie' && isBatchEntry(e)) continue
+    let effectiveTier = tier
+    if (mode === 'single' && isBatchEntry(e)) effectiveTier = 'B'
+    if (mode === 'single' && !isBatchEntry(e) && tier === 'A' && !episodeMatches(e.episode, query.episode)) effectiveTier = 'C'
+    const entryOpts = { exclusions, batch: mode === 'batch', tier: effectiveTier }
+    for (const r of entryToResults(e, entryOpts)) {
       if (seenHashes.has(r.hash)) continue
       seenHashes.add(r.hash)
-      out.push(fallbackMarked ? { ...r, accuracy: 'low' } : r)
+      out.push({ ...r, _tier: effectiveTier })
     }
   }
 
+  const hasA = out.some(r => r._tier === 'A')
   return out.sort((a, b) => {
+    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1
     if (resolution) {
       const am = matchesResolution(a.title, resolution) ? 1 : 0
       const bm = matchesResolution(b.title, resolution) ? 1 : 0
@@ -173,7 +167,7 @@ async function runSearch (query, mode) {
     const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0)
     if (dt !== 0) return dt
     return b.size - a.size
-  }).slice(0, 30)
+  }).slice(0, 30).map(({ _tier, ...rest }) => rest)
 }
 
 export default new class SubsPlease {

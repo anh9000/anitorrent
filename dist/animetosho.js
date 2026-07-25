@@ -227,6 +227,25 @@ function rankTitlesForQuery(titles) {
   const pool = latin.length ? latin : list;
   return pool.sort((a, b) => a.degenerate - b.degenerate || a.i - b.i).map((x) => x.t);
 }
+function classifyResult(title, opts) {
+  const showTokens = opts.showTokens;
+  const minHits = opts.minHits != null ? opts.minHits : showTokens && showTokens.size >= 3 ? 2 : 1;
+  if (!resultMatchesShow(title, showTokens, minHits)) return null;
+  const seasonOk = resultMatchesSeason(title, opts.showSeason);
+  const yearOk = resultMatchesYear(title, opts.showYears);
+  const isBatch = looksLikeBatch(title);
+  if (opts.mode === "batch") {
+    return seasonOk && yearOk && isBatch ? "A" : "C";
+  }
+  if (opts.mode === "movie") {
+    return seasonOk && yearOk ? "A" : "C";
+  }
+  const epOk = opts.episode == null || titleHasEpisode(title, opts.episode);
+  if (seasonOk && yearOk && epOk) {
+    return isBatch ? "B" : "A";
+  }
+  return "C";
+}
 function matchesResolution(title, resolution) {
   if (!resolution) return true;
   return title.includes(resolution + "p") || title.includes(resolution);
@@ -305,7 +324,9 @@ function toResult(item, accuracy) {
   };
 }
 function rank(results, resolution) {
+  const hasA = results.some((r) => r._tier === "A");
   return results.sort((a, b) => {
+    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1;
     if (resolution) {
       const am = matchesResolution(a.title, resolution) ? 1 : 0;
       const bm = matchesResolution(b.title, resolution) ? 1 : 0;
@@ -336,10 +357,16 @@ async function fetchByAid(aid) {
 }
 async function fetchByText(titles) {
   const seen = /* @__PURE__ */ new Map();
-  const ordered = rankTitlesForQuery(titles).slice(0, 3);
-  for (const title of ordered) {
+  const queries = [];
+  const seenQueries = /* @__PURE__ */ new Set();
+  for (const title of rankTitlesForQuery(titles)) {
     const q = trimTitleForQuery(title);
-    if (!q) continue;
+    if (!q || seenQueries.has(q)) continue;
+    seenQueries.add(q);
+    queries.push(q);
+    if (queries.length >= 3) break;
+  }
+  for (const q of queries) {
     let items;
     try {
       items = await tryFetch(BASE + "?q=" + encodeURIComponent(q));
@@ -355,17 +382,19 @@ async function fetchByText(titles) {
   }
   return [...seen.values()];
 }
-function filterAndShape(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears) {
-  const candidates = dedupe(raw).filter((r) => !hitsExclusion(r.title, exclusions)).filter((r) => resultMatchesShow(r.title, showTokens, minHits));
-  let strict = candidates.filter((r) => resultMatchesSeason(r.title, showSeason)).filter((r) => resultMatchesYear(r.title, showYears));
-  if (mode === "single" && query.episode != null) {
-    strict = strict.filter((r) => titleHasEpisode(r.title, query.episode));
+function classifyAndTag(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears) {
+  const out = [];
+  for (const r of dedupe(raw)) {
+    if (hitsExclusion(r.title, exclusions)) continue;
+    const tier = classifyResult(r.title, { showTokens, showSeason, showYears, episode: query.episode, mode, minHits });
+    if (tier === null) continue;
+    const item = { ...r, _tier: tier };
+    if (tier !== "A") item.accuracy = "low";
+    if (tier === "B") item.type = "batch";
+    out.push(item);
   }
-  if (mode === "batch") {
-    return strict.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch", accuracy: "low" }));
-  }
-  if (strict.length) return strict;
-  return candidates.map((r) => ({ ...r, accuracy: "low" }));
+  if (mode === "batch") return out.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch", accuracy: "low" }));
+  return out;
 }
 async function search(query, mode) {
   if (!query) return [];
@@ -390,12 +419,18 @@ async function search(query, mode) {
       raw = [];
     }
   }
-  let results = filterAndShape(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears);
-  if (!results.length && (query.titles || []).length) {
+  let results = classifyAndTag(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears);
+  if (!results.filter((r) => r._tier === "A").length && (query.titles || []).length) {
     const textRaw = await fetchByText(query.titles);
-    results = filterAndShape(textRaw, query, mode, showTokens, exclusions, minHits, showSeason, showYears);
+    const textResults = classifyAndTag(textRaw, query, mode, showTokens, exclusions, minHits, showSeason, showYears);
+    const seen = new Set(results.map((r) => r.hash));
+    for (const r of textResults) {
+      if (seen.has(r.hash)) continue;
+      seen.add(r.hash);
+      results.push(r);
+    }
   }
-  return rank(results, resolution).slice(0, 30);
+  return rank(results, resolution).slice(0, 30).map(({ _tier, ...rest }) => rest);
 }
 var animetosho_default = new class AnimeTosho {
   async single(query) {

@@ -1,7 +1,7 @@
 import {
-  buildTitleTokens, resultMatchesShow, titleHasEpisode, looksLikeBatch,
+  buildTitleTokens, looksLikeBatch,
   trimTitleForQuery, rankTitlesForQuery, matchesResolution, hitsExclusion,
-  detectShowSeason, resultMatchesSeason, detectShowYears, resultMatchesYear
+  detectShowSeason, detectShowYears, classifyResult
 } from './lib/shared.js'
 
 const BASE = 'https://feed.animetosho.org/json'
@@ -78,7 +78,9 @@ function toResult (item, accuracy) {
 }
 
 function rank (results, resolution) {
+  const hasA = results.some(r => r._tier === 'A')
   return results.sort((a, b) => {
+    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1
     if (resolution) {
       const am = matchesResolution(a.title, resolution) ? 1 : 0
       const bm = matchesResolution(b.title, resolution) ? 1 : 0
@@ -113,10 +115,16 @@ async function fetchByAid (aid) {
 
 async function fetchByText (titles) {
   const seen = new Map()
-  const ordered = rankTitlesForQuery(titles).slice(0, 3)
-  for (const title of ordered) {
+  const queries = []
+  const seenQueries = new Set()
+  for (const title of rankTitlesForQuery(titles)) {
     const q = trimTitleForQuery(title)
-    if (!q) continue
+    if (!q || seenQueries.has(q)) continue
+    seenQueries.add(q)
+    queries.push(q)
+    if (queries.length >= 3) break
+  }
+  for (const q of queries) {
     let items
     try {
       items = await tryFetch(BASE + '?q=' + encodeURIComponent(q))
@@ -133,33 +141,19 @@ async function fetchByText (titles) {
   return [...seen.values()]
 }
 
-function filterAndShape (raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears) {
-  // First narrow by exclusions + show tokens (hard filter, if tokens don't
-  // match, it is not this show).
-  const candidates = dedupe(raw)
-    .filter(r => !hitsExclusion(r.title, exclusions))
-    .filter(r => resultMatchesShow(r.title, showTokens, minHits))
-
-  let strict = candidates
-    .filter(r => resultMatchesSeason(r.title, showSeason))
-    .filter(r => resultMatchesYear(r.title, showYears))
-
-  if (mode === 'single' && query.episode != null) {
-    strict = strict.filter(r => titleHasEpisode(r.title, query.episode))
+function classifyAndTag (raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears) {
+  const out = []
+  for (const r of dedupe(raw)) {
+    if (hitsExclusion(r.title, exclusions)) continue
+    const tier = classifyResult(r.title, { showTokens, showSeason, showYears, episode: query.episode, mode, minHits })
+    if (tier === null) continue
+    const item = { ...r, _tier: tier }
+    if (tier !== 'A') item.accuracy = 'low'
+    if (tier === 'B') item.type = 'batch'
+    out.push(item)
   }
-
-  if (mode === 'batch') {
-    return strict
-      .filter(r => looksLikeBatch(r.title))
-      .map(r => ({ ...r, type: 'batch', accuracy: 'low' }))
-  }
-
-  // Fallback: if strict returns empty (common for per-cour AniList entries
-  // like "BLEACH: The Calamity" ep 1 which is really ep 41 in filenames), fall
-  // back to token-only matches tagged as low accuracy so users can pick
-  // manually instead of seeing an empty picker.
-  if (strict.length) return strict
-  return candidates.map(r => ({ ...r, accuracy: 'low' }))
+  if (mode === 'batch') return out.filter(r => looksLikeBatch(r.title)).map(r => ({ ...r, type: 'batch', accuracy: 'low' }))
+  return out
 }
 
 async function search (query, mode) {
@@ -181,14 +175,20 @@ async function search (query, mode) {
     try { raw = await fetchByAid(resolvedAid) } catch (_) { raw = [] }
   }
 
-  let results = filterAndShape(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears)
+  let results = classifyAndTag(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears)
 
-  if (!results.length && (query.titles || []).length) {
+  if (!results.filter(r => r._tier === 'A').length && (query.titles || []).length) {
     const textRaw = await fetchByText(query.titles)
-    results = filterAndShape(textRaw, query, mode, showTokens, exclusions, minHits, showSeason, showYears)
+    const textResults = classifyAndTag(textRaw, query, mode, showTokens, exclusions, minHits, showSeason, showYears)
+    const seen = new Set(results.map(r => r.hash))
+    for (const r of textResults) {
+      if (seen.has(r.hash)) continue
+      seen.add(r.hash)
+      results.push(r)
+    }
   }
 
-  return rank(results, resolution).slice(0, 30)
+  return rank(results, resolution).slice(0, 30).map(({ _tier, ...rest }) => rest)
 }
 
 export default new class AnimeTosho {

@@ -1,8 +1,8 @@
 import {
-  buildTitleTokens, resultMatchesShow, titleHasEpisode, looksLikeBatch,
-  trimTitleForQuery, rankTitlesForQuery, pad, matchesResolution,
+  buildTitleTokens, looksLikeBatch,
+  trimTitleForQuery, rankTitlesForQuery, matchesResolution,
   hitsExclusion, buildMagnet, parseSize, pickTag, pickItems, httpGet, checkNyaaFeed,
-  detectShowSeason, resultMatchesSeason, detectShowYears, resultMatchesYear
+  detectShowSeason, detectShowYears, classifyResult
 } from './lib/shared.js'
 
 const NYAA_BASE = 'https://nyaa.si'
@@ -79,8 +79,10 @@ function itemToResult (raw, opts) {
   }
 }
 
-function rankResults (results, resolution) {
+function sortResults (results, resolution) {
+  const hasA = results.some(r => r._tier === 'A')
   return results.sort((a, b) => {
+    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1
     if (resolution) {
       const am = matchesResolution(a.title, resolution) ? 1 : 0
       const bm = matchesResolution(b.title, resolution) ? 1 : 0
@@ -92,16 +94,6 @@ function rankResults (results, resolution) {
   })
 }
 
-function queryVariantsForTitle (title, opts) {
-  const base = trimTitleForQuery(title)
-  if (!base) return []
-  const variants = [base]
-  if (opts.episode != null && !opts.batch && !opts.movie) {
-    variants.push(base + ' ' + pad(opts.episode))
-  }
-  return variants
-}
-
 async function runSearch (query, opts) {
   if (!query.titles || !query.titles.length) return []
 
@@ -110,51 +102,43 @@ async function runSearch (query, opts) {
   const showTokens = buildTitleTokens(query.titles)
   const showSeason = detectShowSeason(query.titles)
   const showYears = detectShowYears(query.titles)
+  const mode = opts.batch ? 'batch' : (opts.movie ? 'movie' : 'single')
   const seen = new Set()
-  const seenFallback = new Set()
   const results = []
-  // Fallback: items that matched show tokens but failed season/year/episode
-  // filters. Used only when strict filters return zero, to give the user
-  // *something* to pick from instead of "No results found". Common trigger:
-  // per-cour AniList entries (e.g. "BLEACH: The Calamity" has episodes 1-10
-  // but release filenames use continuous numbering S17E41+), where our
-  // episode filter can not map between the two schemes.
-  const fallback = []
 
-  const titles = rankTitlesForQuery(query.titles).slice(0, 2)
-  outer: for (const title of titles) {
-    const variants = queryVariantsForTitle(title, opts)
-    for (const q of variants) {
-      let items
-      try {
-        items = await rssSearchWithRetry(q)
-      } catch (err) {
-        if (results.length) break outer
-        throw err
-      }
-      for (const raw of items) {
-        const r = itemToResult(raw, { exclusions, batch: opts.batch })
-        if (!r) continue
-        if (!resultMatchesShow(r.title, showTokens)) continue
-        const strictOk =
-          resultMatchesSeason(r.title, showSeason) &&
-          resultMatchesYear(r.title, showYears) &&
-          (opts.episode == null || opts.batch || opts.movie || titleHasEpisode(r.title, opts.episode))
-        if (strictOk) {
-          if (seen.has(r.hash)) continue
-          seen.add(r.hash)
-          results.push(r)
-        } else if (!seenFallback.has(r.hash)) {
-          seenFallback.add(r.hash)
-          fallback.push({ ...r, accuracy: 'low' })
-        }
-      }
-    }
-    if (results.length >= 20) break
+  const queries = []
+  const seenQueries = new Set()
+  for (const title of rankTitlesForQuery(query.titles)) {
+    const q = trimTitleForQuery(title)
+    if (!q || seenQueries.has(q)) continue
+    seenQueries.add(q)
+    queries.push(q)
+    if (queries.length >= 3) break
   }
 
-  const final = results.length ? results : fallback
-  return rankResults(final, resolution).slice(0, 30)
+  for (const q of queries) {
+    let items
+    try {
+      items = await rssSearchWithRetry(q)
+    } catch (err) {
+      if (results.length) break
+      throw err
+    }
+    for (const raw of items) {
+      const r = itemToResult(raw, { exclusions, batch: opts.batch })
+      if (!r || seen.has(r.hash)) continue
+      const tier = classifyResult(r.title, { showTokens, showSeason, showYears, episode: opts.episode, mode })
+      if (tier === null) continue
+      seen.add(r.hash)
+      const item = { ...r, _tier: tier }
+      if (tier !== 'A') item.accuracy = 'low'
+      if (tier === 'B') item.type = 'batch'
+      results.push(item)
+    }
+    if (results.filter(r => r._tier === 'A').length >= 20) break
+  }
+
+  return sortResults(results, resolution).slice(0, 30).map(({ _tier, ...rest }) => rest)
 }
 
 export default new class Nyaa {
@@ -171,11 +155,6 @@ export default new class Nyaa {
     const results = await runSearch(query, { batch: true })
     return results
       .filter(r => looksLikeBatch(r.title))
-      // Batches get accuracy: 'low' so Hayase's tier grouping puts them below
-      // single-episode results. Users resuming a specific episode almost always
-      // want the single-episode release, not a season pack. Seadex's curated
-      // "best release" tag comes through type: 'best' from a different path and
-      // is unaffected, those stay at their normal tier.
       .map(r => ({ ...r, type: 'batch', accuracy: 'low' }))
   }
 
