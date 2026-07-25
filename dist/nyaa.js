@@ -205,9 +205,159 @@ function titleHasEpisode(title, ep) {
   return patterns.some((re) => re.test(title));
 }
 function looksLikeBatch(title) {
+  if (/\bs\d{1,2}e\d{1,3}\s*[-~]\s*(?:s\d{1,2})?e?\d{1,3}\b/i.test(title)) return true;
   if (/\bs\d{1,2}e\d{1,3}\b/i.test(title)) return false;
   if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false;
   return BATCH_PATTERNS.some((re) => re.test(title));
+}
+function tagAccuracy(tier, dateMs, sourceDefault) {
+  if (tier === "A") return sourceDefault;
+  if (tier === "B") return "low";
+  const days = (Date.now() - (dateMs || 0)) / 864e5;
+  if (days < 60) return sourceDefault;
+  if (days < 180) return "medium";
+  return "low";
+}
+function buildQueries(titles, opts = {}) {
+  const limit = opts.limit || 3;
+  const bases = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const title of rankTitlesForQuery(titles || [])) {
+    const q = trimTitleForQuery(title);
+    if (!q || seen.has(q)) continue;
+    seen.add(q);
+    bases.push(q);
+    if (bases.length >= limit) break;
+  }
+  if (opts.episode == null) return bases;
+  const numbered = bases.map((b) => b + " " + pad(opts.episode));
+  return [...bases, ...numbered].slice(0, opts.maxQueries || 4);
+}
+var ANILIST_API = "https://graphql.anilist.co";
+var offsetCache = /* @__PURE__ */ new Map();
+async function fetchPrequelChain(anilistId) {
+  const seen = /* @__PURE__ */ new Set();
+  const counts = [];
+  let current = Number(anilistId);
+  for (let depth = 0; depth < 12 && current && !seen.has(current); depth++) {
+    seen.add(current);
+    const body = JSON.stringify({
+      query: "query($id:Int){Media(id:$id){episodes format relations{edges{relationType node{id episodes format}}}}}",
+      variables: { id: current }
+    });
+    let media;
+    try {
+      const res = await fetch(ANILIST_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body
+      });
+      if (!res.ok) break;
+      media = (await res.json())?.data?.Media;
+    } catch {
+      break;
+    }
+    if (!media) break;
+    const prequel = (media.relations?.edges || []).filter((e) => e.relationType === "PREQUEL").map((e) => e.node).filter((n) => n && (n.format === "TV" || n.format === "ONA" || n.format === "TV_SHORT")).sort((a, b) => (b.episodes || 0) - (a.episodes || 0))[0];
+    if (!prequel || !prequel.episodes) break;
+    counts.push(prequel.episodes);
+    current = prequel.id;
+  }
+  return counts;
+}
+async function resolveEpisodeCandidates(query) {
+  const ep = Number(query.episode);
+  if (!Number.isInteger(ep) || !query.anilistId) return null;
+  const key = String(query.anilistId);
+  if (!offsetCache.has(key)) {
+    offsetCache.set(key, fetchPrequelChain(query.anilistId).catch(() => []));
+  }
+  const counts = await offsetCache.get(key);
+  const candidates = /* @__PURE__ */ new Set([ep]);
+  let running = 0;
+  for (const c of counts || []) {
+    running += c;
+    if (running >= 10) candidates.add(ep + running);
+  }
+  return candidates;
+}
+function searchContext(query, mode) {
+  const titles = query.titles || [];
+  const primary = rankTitlesForQuery(titles)[0];
+  const primaryTokens = primary ? buildTitleTokens([primary]) : /* @__PURE__ */ new Set();
+  return {
+    mode,
+    showTokens: buildTitleTokens(titles),
+    showSeason: detectShowSeason(titles),
+    showYears: detectShowYears(titles),
+    minHits: primaryTokens.size >= 3 ? 2 : 1,
+    episode: query.episode,
+    episodeCandidates: query.episodeCandidates || null,
+    exclusions: query.exclusions || [],
+    resolution: query.resolution || ""
+  };
+}
+function shapeResult(r, ctx, sourceDefault) {
+  const tier = classifyResult(r.title, ctx);
+  if (tier === null) return null;
+  const out = { ...r, _tier: tier, accuracy: tagAccuracy(tier, r.date?.getTime?.(), sourceDefault) };
+  if (tier === "B") out.type = "batch";
+  return out;
+}
+function shapeAll(items, ctx, sourceDefault) {
+  const shape = (c) => {
+    const out = [];
+    for (const r of items) {
+      const s = shapeResult(r, c, sourceDefault);
+      if (s) out.push(s);
+    }
+    return out;
+  };
+  const exact = shape({ ...ctx, episodeCandidates: null });
+  if (!ctx.episodeCandidates || ctx.episodeCandidates.size <= 1) return exact;
+  const offsetOnly = new Set(ctx.episodeCandidates);
+  offsetOnly.delete(ctx.episode);
+  if (!offsetOnly.size) return exact;
+  const newestExact = newestOf(exact);
+  const newestOffset = newestOf(shape({ ...ctx, episodeCandidates: offsetOnly }));
+  if (newestOffset == null) return exact;
+  if (newestExact != null && newestExact >= newestOffset) return exact;
+  return shape(ctx);
+}
+function newestOf(results) {
+  let newest = null;
+  for (const r of results) {
+    if (r._tier !== "A") continue;
+    const t = r.date?.getTime?.() || 0;
+    if (newest == null || t > newest) newest = t;
+  }
+  return newest;
+}
+function sortResults(results, resolution) {
+  const hasExact = results.some((r) => r._tier === "A");
+  return results.sort((a, b) => {
+    if (hasExact && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1;
+    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0);
+    if (dt !== 0) return dt;
+    if (resolution) {
+      const am = matchesResolution(a.title, resolution) ? 1 : 0;
+      const bm = matchesResolution(b.title, resolution) ? 1 : 0;
+      if (am !== bm) return bm - am;
+    }
+    return (b.seeders || 0) - (a.seeders || 0);
+  });
+}
+function finalize(results, resolution, limit = 30) {
+  return sortResults(results, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest);
+}
+async function withEpisodeCandidates(query) {
+  try {
+    const episodeCandidates = await resolveEpisodeCandidates(query);
+    if (!episodeCandidates || episodeCandidates.size <= 1) return query;
+    return { ...query, episodeCandidates };
+  } catch {
+    return query;
+  }
 }
 var GENERIC_QUERY_WORDS = /* @__PURE__ */ new Set([
   "monster",
@@ -270,6 +420,10 @@ function rankTitlesForQuery(titles) {
   const pool = latin.length ? latin : list;
   return pool.sort((a, b) => a.degenerate - b.degenerate || a.i - b.i).map((x) => x.t);
 }
+function pad(n) {
+  const s = String(n);
+  return s.length < 2 ? "0" + s : s;
+}
 function classifyResult(title, opts) {
   const showTokens = opts.showTokens;
   const minHits = opts.minHits != null ? opts.minHits : showTokens && showTokens.size >= 3 ? 2 : 1;
@@ -283,11 +437,19 @@ function classifyResult(title, opts) {
   if (opts.mode === "movie") {
     return seasonOk && yearOk ? "A" : "C";
   }
-  const epOk = opts.episode == null || titleHasEpisode(title, opts.episode);
+  const epOk = opts.episode == null || matchesAnyEpisode(title, opts);
   if (seasonOk && yearOk && epOk) {
     return isBatch ? "B" : "A";
   }
   return "C";
+}
+function matchesAnyEpisode(title, opts) {
+  const candidates = opts.episodeCandidates;
+  if (candidates && candidates.size) {
+    for (const n of candidates) if (titleHasEpisode(title, n)) return true;
+    return false;
+  }
+  return titleHasEpisode(title, opts.episode);
 }
 function matchesResolution(title, resolution) {
   if (!resolution) return true;
@@ -350,6 +512,7 @@ function pickItems(xml) {
 }
 
 // src/nyaa.js
+var SOURCE_DEFAULT = "medium";
 var NYAA_BASE = "https://nyaa.si";
 var ANIME_CATEGORY = "1_2";
 async function rssSearch(query) {
@@ -416,66 +579,36 @@ function itemToResult(raw, opts) {
     type: opts.batch ? "batch" : void 0
   };
 }
-function sortResults(results, resolution) {
-  const hasA = results.some((r) => r._tier === "A");
-  return results.sort((a, b) => {
-    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1;
-    if (resolution) {
-      const am = matchesResolution(a.title, resolution) ? 1 : 0;
-      const bm = matchesResolution(b.title, resolution) ? 1 : 0;
-      if (am !== bm) return bm - am;
-    }
-    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0);
-    if (dt !== 0) return dt;
-    return b.seeders - a.seeders;
-  });
-}
 async function runSearch(query, opts) {
   if (!query.titles || !query.titles.length) return [];
-  const exclusions = query.exclusions || [];
-  const resolution = query.resolution || "";
-  const showTokens = buildTitleTokens(query.titles);
-  const showSeason = detectShowSeason(query.titles);
-  const showYears = detectShowYears(query.titles);
   const mode = opts.batch ? "batch" : opts.movie ? "movie" : "single";
+  const ctx = searchContext(query, mode);
   const seen = /* @__PURE__ */ new Set();
-  const results = [];
-  const queries = [];
-  const seenQueries = /* @__PURE__ */ new Set();
-  for (const title of rankTitlesForQuery(query.titles)) {
-    const q = trimTitleForQuery(title);
-    if (!q || seenQueries.has(q)) continue;
-    seenQueries.add(q);
-    queries.push(q);
-    if (queries.length >= 3) break;
-  }
-  for (const q of queries) {
+  const collected = [];
+  let shaped = [];
+  for (const q of buildQueries(query.titles, { limit: 2, episode: opts.episode })) {
     let items;
     try {
       items = await rssSearchWithRetry(q);
     } catch (err) {
-      if (results.length) break;
+      if (collected.length) break;
       throw err;
     }
     for (const raw of items) {
-      const r = itemToResult(raw, { exclusions, batch: opts.batch });
+      const r = itemToResult(raw, { exclusions: ctx.exclusions, batch: opts.batch });
       if (!r || seen.has(r.hash)) continue;
-      const tier = classifyResult(r.title, { showTokens, showSeason, showYears, episode: opts.episode, mode });
-      if (tier === null) continue;
       seen.add(r.hash);
-      const item = { ...r, _tier: tier };
-      if (tier !== "A") item.accuracy = "low";
-      if (tier === "B") item.type = "batch";
-      results.push(item);
+      collected.push(r);
     }
-    if (results.filter((r) => r._tier === "A").length >= 20) break;
+    shaped = shapeAll(collected, ctx, SOURCE_DEFAULT);
+    if (shaped.filter((r) => r._tier === "A").length >= 20) break;
   }
-  return sortResults(results, resolution).slice(0, 30).map(({ _tier, ...rest }) => rest);
+  return finalize(shaped, ctx.resolution);
 }
 var nyaa_default = new class Nyaa {
   async single(query) {
     if (query.episodeCount === 1) return runSearch(query, { movie: true });
-    return runSearch(query, { episode: query.episode });
+    return runSearch(await withEpisodeCandidates(query), { episode: query.episode });
   }
   async batch(query) {
     const results = await runSearch(query, { batch: true });

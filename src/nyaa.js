@@ -1,9 +1,10 @@
 import {
-  buildTitleTokens, looksLikeBatch,
-  trimTitleForQuery, rankTitlesForQuery, matchesResolution,
-  hitsExclusion, buildMagnet, parseSize, pickTag, pickItems, httpGet, checkNyaaFeed,
-  detectShowSeason, detectShowYears, classifyResult
+  looksLikeBatch, hitsExclusion, buildMagnet, parseSize, pickTag, pickItems,
+  httpGet, checkNyaaFeed, buildQueries, searchContext, shapeAll, finalize,
+  withEpisodeCandidates
 } from './lib/shared.js'
+
+const SOURCE_DEFAULT = 'medium'
 
 const NYAA_BASE = 'https://nyaa.si'
 const ANIME_CATEGORY = '1_2'
@@ -79,66 +80,34 @@ function itemToResult (raw, opts) {
   }
 }
 
-function sortResults (results, resolution) {
-  const hasA = results.some(r => r._tier === 'A')
-  return results.sort((a, b) => {
-    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1
-    if (resolution) {
-      const am = matchesResolution(a.title, resolution) ? 1 : 0
-      const bm = matchesResolution(b.title, resolution) ? 1 : 0
-      if (am !== bm) return bm - am
-    }
-    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0)
-    if (dt !== 0) return dt
-    return b.seeders - a.seeders
-  })
-}
-
 async function runSearch (query, opts) {
   if (!query.titles || !query.titles.length) return []
 
-  const exclusions = query.exclusions || []
-  const resolution = query.resolution || ''
-  const showTokens = buildTitleTokens(query.titles)
-  const showSeason = detectShowSeason(query.titles)
-  const showYears = detectShowYears(query.titles)
   const mode = opts.batch ? 'batch' : (opts.movie ? 'movie' : 'single')
+  const ctx = searchContext(query, mode)
   const seen = new Set()
-  const results = []
+  const collected = []
+  let shaped = []
 
-  const queries = []
-  const seenQueries = new Set()
-  for (const title of rankTitlesForQuery(query.titles)) {
-    const q = trimTitleForQuery(title)
-    if (!q || seenQueries.has(q)) continue
-    seenQueries.add(q)
-    queries.push(q)
-    if (queries.length >= 3) break
-  }
-
-  for (const q of queries) {
+  for (const q of buildQueries(query.titles, { limit: 2, episode: opts.episode })) {
     let items
     try {
       items = await rssSearchWithRetry(q)
     } catch (err) {
-      if (results.length) break
+      if (collected.length) break
       throw err
     }
     for (const raw of items) {
-      const r = itemToResult(raw, { exclusions, batch: opts.batch })
+      const r = itemToResult(raw, { exclusions: ctx.exclusions, batch: opts.batch })
       if (!r || seen.has(r.hash)) continue
-      const tier = classifyResult(r.title, { showTokens, showSeason, showYears, episode: opts.episode, mode })
-      if (tier === null) continue
       seen.add(r.hash)
-      const item = { ...r, _tier: tier }
-      if (tier !== 'A') item.accuracy = 'low'
-      if (tier === 'B') item.type = 'batch'
-      results.push(item)
+      collected.push(r)
     }
-    if (results.filter(r => r._tier === 'A').length >= 20) break
+    shaped = shapeAll(collected, ctx, SOURCE_DEFAULT)
+    if (shaped.filter(r => r._tier === 'A').length >= 20) break
   }
 
-  return sortResults(results, resolution).slice(0, 30).map(({ _tier, ...rest }) => rest)
+  return finalize(shaped, ctx.resolution)
 }
 
 export default new class Nyaa {
@@ -148,7 +117,7 @@ export default new class Nyaa {
     // or "S01E01", so applying titleHasEpisode() would filter out every real
     // release. Treat single() on a 1-episode entry as movie mode.
     if (query.episodeCount === 1) return runSearch(query, { movie: true })
-    return runSearch(query, { episode: query.episode })
+    return runSearch(await withEpisodeCandidates(query), { episode: query.episode })
   }
 
   async batch (query) {

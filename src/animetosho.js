@@ -1,8 +1,9 @@
 import {
-  buildTitleTokens, looksLikeBatch,
-  trimTitleForQuery, rankTitlesForQuery, matchesResolution, hitsExclusion,
-  detectShowSeason, detectShowYears, classifyResult
+  looksLikeBatch, hitsExclusion, buildQueries, searchContext,
+  shapeAll, finalize, withEpisodeCandidates
 } from './lib/shared.js'
+
+const SOURCE_DEFAULT = 'high'
 
 const BASE = 'https://feed.animetosho.org/json'
 const MAPPING_URL = 'https://raw.githubusercontent.com/anh9000/anitorrent/main/data/anilist-to-anidb.json'
@@ -77,21 +78,6 @@ function toResult (item, accuracy) {
   }
 }
 
-function rank (results, resolution) {
-  const hasA = results.some(r => r._tier === 'A')
-  return results.sort((a, b) => {
-    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1
-    if (resolution) {
-      const am = matchesResolution(a.title, resolution) ? 1 : 0
-      const bm = matchesResolution(b.title, resolution) ? 1 : 0
-      if (am !== bm) return bm - am
-    }
-    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0)
-    if (dt !== 0) return dt
-    return b.seeders - a.seeders
-  })
-}
-
 function dedupe (items) {
   const seen = new Set()
   const out = []
@@ -115,16 +101,7 @@ async function fetchByAid (aid) {
 
 async function fetchByText (titles) {
   const seen = new Map()
-  const queries = []
-  const seenQueries = new Set()
-  for (const title of rankTitlesForQuery(titles)) {
-    const q = trimTitleForQuery(title)
-    if (!q || seenQueries.has(q)) continue
-    seenQueries.add(q)
-    queries.push(q)
-    if (queries.length >= 3) break
-  }
-  for (const q of queries) {
+  for (const q of buildQueries(titles)) {
     let items
     try {
       items = await tryFetch(BASE + '?q=' + encodeURIComponent(q))
@@ -141,30 +118,19 @@ async function fetchByText (titles) {
   return [...seen.values()]
 }
 
-function classifyAndTag (raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears) {
-  const out = []
-  for (const r of dedupe(raw)) {
-    if (hitsExclusion(r.title, exclusions)) continue
-    const tier = classifyResult(r.title, { showTokens, showSeason, showYears, episode: query.episode, mode, minHits })
-    if (tier === null) continue
-    const item = { ...r, _tier: tier }
-    if (tier !== 'A') item.accuracy = 'low'
-    if (tier === 'B') item.type = 'batch'
-    out.push(item)
+function classifyAndTag (raw, ctx) {
+  const items = dedupe(raw).filter(r => !hitsExclusion(r.title, ctx.exclusions))
+  const out = shapeAll(items, ctx, SOURCE_DEFAULT)
+  if (ctx.mode === 'batch') {
+    return out.filter(r => looksLikeBatch(r.title)).map(r => ({ ...r, type: 'batch', accuracy: 'low' }))
   }
-  if (mode === 'batch') return out.filter(r => looksLikeBatch(r.title)).map(r => ({ ...r, type: 'batch', accuracy: 'low' }))
   return out
 }
 
 async function search (query, mode) {
   if (!query) return []
 
-  const exclusions = query.exclusions || []
-  const resolution = query.resolution || ''
-  const showTokens = buildTitleTokens(query.titles || [])
-  const showSeason = detectShowSeason(query.titles || [])
-  const showYears = detectShowYears(query.titles || [])
-  const minHits = showTokens.size >= 3 ? 2 : 1
+  const ctx = searchContext(query, mode)
   const resolvedAid = await resolveAnidbAid(query)
 
   let raw = []
@@ -175,26 +141,24 @@ async function search (query, mode) {
     try { raw = await fetchByAid(resolvedAid) } catch (_) { raw = [] }
   }
 
-  let results = classifyAndTag(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears)
+  const results = classifyAndTag(raw, ctx)
 
-  if (!results.filter(r => r._tier === 'A').length && (query.titles || []).length) {
-    const textRaw = await fetchByText(query.titles)
-    const textResults = classifyAndTag(textRaw, query, mode, showTokens, exclusions, minHits, showSeason, showYears)
+  if (!results.some(r => r._tier === 'A') && (query.titles || []).length) {
     const seen = new Set(results.map(r => r.hash))
-    for (const r of textResults) {
+    for (const r of classifyAndTag(await fetchByText(query.titles), ctx)) {
       if (seen.has(r.hash)) continue
       seen.add(r.hash)
       results.push(r)
     }
   }
 
-  return rank(results, resolution).slice(0, 30).map(({ _tier, ...rest }) => rest)
+  return finalize(results, ctx.resolution)
 }
 
 export default new class AnimeTosho {
   async single (query) {
     if (query.episodeCount === 1) return search(query, 'movie')
-    return search(query, 'single')
+    return search(await withEpisodeCandidates(query), 'single')
   }
   async batch (query) { return search(query, 'batch') }
   async movie (query) { return search(query, 'movie') }

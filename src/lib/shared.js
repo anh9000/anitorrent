@@ -244,9 +244,218 @@ export function titleHasEpisode (title, ep) {
 }
 
 export function looksLikeBatch (title) {
+  if (/\bs\d{1,2}e\d{1,3}\s*[-~]\s*(?:s\d{1,2})?e?\d{1,3}\b/i.test(title)) return true
   if (/\bs\d{1,2}e\d{1,3}\b/i.test(title)) return false
   if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false
   return BATCH_PATTERNS.some(re => re.test(title))
+}
+
+export function tagAccuracy (tier, dateMs, sourceDefault) {
+  if (tier === 'A') return sourceDefault
+  if (tier === 'B') return 'low'
+  const days = (Date.now() - (dateMs || 0)) / 86400000
+  if (days < 60) return sourceDefault
+  if (days < 180) return 'medium'
+  return 'low'
+}
+
+// Up to `limit` DISTINCT search strings for a show. Multiple AniList titles
+// often trim to the same query (every Bleach variant becomes "bleach"), which
+// used to fire the same request two or three times and waste the budget.
+//
+// When an episode is given, an episode-numbered query is appended. Feeds return
+// only their most recent page, so an older episode is invisible to the plain
+// title query; "frieren 08" is the only way to reach it. Results from it are
+// tiered like any other, so a stale batch it drags in cannot outrank a real
+// match.
+export function buildQueries (titles, opts = {}) {
+  const limit = opts.limit || 3
+  const bases = []
+  const seen = new Set()
+  for (const title of rankTitlesForQuery(titles || [])) {
+    const q = trimTitleForQuery(title)
+    if (!q || seen.has(q)) continue
+    seen.add(q)
+    bases.push(q)
+    if (bases.length >= limit) break
+  }
+  if (opts.episode == null) return bases
+  // Every base title gets an episode-numbered form, not just the first: groups
+  // name files after whichever title they prefer, so "meitantei conan 1100"
+  // finds nothing while "detective conan 1100" finds the episode.
+  const numbered = bases.map(b => b + ' ' + pad(opts.episode))
+  return [...bases, ...numbered].slice(0, opts.maxQueries || 4)
+}
+
+const ANILIST_API = 'https://graphql.anilist.co'
+const offsetCache = new Map()
+
+// AniList splits long shows into one entry per cour while release groups keep
+// numbering files continuously across the arc. "BLEACH: TYBW - The Calamity"
+// ep 1 is ep 41 on nyaa. Walking the PREQUEL chain and accumulating episode
+// counts recovers the offsets: 14 + 13 + 13 = 40, so 1 -> 41.
+//
+// The chain is followed past the arc boundary too (into the 366-episode 2004
+// series), because different groups pick different roots. Every cumulative sum
+// becomes a candidate, so whichever convention a group used still matches.
+async function fetchPrequelChain (anilistId) {
+  const seen = new Set()
+  const counts = []
+  let current = Number(anilistId)
+  for (let depth = 0; depth < 12 && current && !seen.has(current); depth++) {
+    seen.add(current)
+    const body = JSON.stringify({
+      query: 'query($id:Int){Media(id:$id){episodes format relations{edges{relationType node{id episodes format}}}}}',
+      variables: { id: current }
+    })
+    let media
+    try {
+      const res = await fetch(ANILIST_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body
+      })
+      if (!res.ok) break
+      media = (await res.json())?.data?.Media
+    } catch {
+      break
+    }
+    if (!media) break
+    const prequel = (media.relations?.edges || [])
+      .filter(e => e.relationType === 'PREQUEL')
+      .map(e => e.node)
+      .filter(n => n && (n.format === 'TV' || n.format === 'ONA' || n.format === 'TV_SHORT'))
+      .sort((a, b) => (b.episodes || 0) - (a.episodes || 0))[0]
+    if (!prequel || !prequel.episodes) break
+    counts.push(prequel.episodes)
+    current = prequel.id
+  }
+  return counts
+}
+
+export async function resolveEpisodeCandidates (query) {
+  const ep = Number(query.episode)
+  if (!Number.isInteger(ep) || !query.anilistId) return null
+  const key = String(query.anilistId)
+  if (!offsetCache.has(key)) {
+    offsetCache.set(key, fetchPrequelChain(query.anilistId).catch(() => []))
+  }
+  const counts = await offsetCache.get(key)
+  const candidates = new Set([ep])
+  let running = 0
+  for (const c of counts || []) {
+    running += c
+    // A cour is never shorter than this. Ignoring tiny offsets keeps a stray
+    // one-episode special from making ep N also match ep N+1, which would let
+    // next week's release masquerade as this week's on an airing show.
+    if (running >= 10) candidates.add(ep + running)
+  }
+  return candidates
+}
+
+export function searchContext (query, mode) {
+  const titles = query.titles || []
+  // Threshold comes from the canonical title alone. Taking it from the union of
+  // every synonym let foreign ones inflate the count: "One Piece" gained tokens
+  // from its Vietnamese and Italian names, demanding two hits from a title that
+  // only ever contains one, so no real release could match.
+  const primary = rankTitlesForQuery(titles)[0]
+  const primaryTokens = primary ? buildTitleTokens([primary]) : new Set()
+  return {
+    mode,
+    showTokens: buildTitleTokens(titles),
+    showSeason: detectShowSeason(titles),
+    showYears: detectShowYears(titles),
+    minHits: primaryTokens.size >= 3 ? 2 : 1,
+    episode: query.episode,
+    episodeCandidates: query.episodeCandidates || null,
+    exclusions: query.exclusions || [],
+    resolution: query.resolution || ''
+  }
+}
+
+// Tier + age-tag a raw result. Returns null when it is not this show.
+export function shapeResult (r, ctx, sourceDefault) {
+  const tier = classifyResult(r.title, ctx)
+  if (tier === null) return null
+  const out = { ...r, _tier: tier, accuracy: tagAccuracy(tier, r.date?.getTime?.(), sourceDefault) }
+  if (tier === 'B') out.type = 'batch'
+  return out
+}
+
+// Shape every result under both numbering schemes and keep the better one.
+//
+// A per-cour entry has two plausible readings of "episode 1": the literal one,
+// and ep 41 of the continuous arc. Both usually find something, since an older
+// cour also has an "01" file, so presence alone cannot decide. Recency can: the
+// episode the user is asking for is the one that was just uploaded, while the
+// rival reading only turns up a years-old file from a finished cour.
+export function shapeAll (items, ctx, sourceDefault) {
+  const shape = c => {
+    const out = []
+    for (const r of items) {
+      const s = shapeResult(r, c, sourceDefault)
+      if (s) out.push(s)
+    }
+    return out
+  }
+  const exact = shape({ ...ctx, episodeCandidates: null })
+  if (!ctx.episodeCandidates || ctx.episodeCandidates.size <= 1) return exact
+
+  const offsetOnly = new Set(ctx.episodeCandidates)
+  offsetOnly.delete(ctx.episode)
+  if (!offsetOnly.size) return exact
+
+  const newestExact = newestOf(exact)
+  const newestOffset = newestOf(shape({ ...ctx, episodeCandidates: offsetOnly }))
+  if (newestOffset == null) return exact
+  if (newestExact != null && newestExact >= newestOffset) return exact
+  return shape(ctx)
+}
+
+function newestOf (results) {
+  let newest = null
+  for (const r of results) {
+    if (r._tier !== 'A') continue
+    const t = r.date?.getTime?.() || 0
+    if (newest == null || t > newest) newest = t
+  }
+  return newest
+}
+
+// Newest first. Exact-episode matches lead only when some exist, so per-cour
+// entries (where no filename maps to the AniList episode number) still put the
+// freshest upload on top instead of a years-old batch.
+export function sortResults (results, resolution) {
+  const hasExact = results.some(r => r._tier === 'A')
+  return results.sort((a, b) => {
+    if (hasExact && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1
+    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0)
+    if (dt !== 0) return dt
+    if (resolution) {
+      const am = matchesResolution(a.title, resolution) ? 1 : 0
+      const bm = matchesResolution(b.title, resolution) ? 1 : 0
+      if (am !== bm) return bm - am
+    }
+    return (b.seeders || 0) - (a.seeders || 0)
+  })
+}
+
+export function finalize (results, resolution, limit = 30) {
+  return sortResults(results, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest)
+}
+
+// Attach absolute-numbering candidates so per-cour entries match the filenames
+// release groups actually use. Never throws: a failed lookup leaves the query
+// untouched and matching falls back to the AniList episode number alone.
+export async function withEpisodeCandidates (query) {
+  try {
+    const episodeCandidates = await resolveEpisodeCandidates(query)
+    if (!episodeCandidates || episodeCandidates.size <= 1) return query
+    return { ...query, episodeCandidates }
+  } catch {
+    return query
+  }
 }
 
 // Common English words that are too broad to be a useful standalone search
@@ -336,11 +545,20 @@ export function classifyResult (title, opts) {
   if (opts.mode === 'movie') {
     return (seasonOk && yearOk) ? 'A' : 'C'
   }
-  const epOk = opts.episode == null || titleHasEpisode(title, opts.episode)
+  const epOk = opts.episode == null || matchesAnyEpisode(title, opts)
   if (seasonOk && yearOk && epOk) {
     return isBatch ? 'B' : 'A'
   }
   return 'C'
+}
+
+function matchesAnyEpisode (title, opts) {
+  const candidates = opts.episodeCandidates
+  if (candidates && candidates.size) {
+    for (const n of candidates) if (titleHasEpisode(title, n)) return true
+    return false
+  }
+  return titleHasEpisode(title, opts.episode)
 }
 
 export function matchesResolution (title, resolution) {

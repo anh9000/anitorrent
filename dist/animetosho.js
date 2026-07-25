@@ -162,9 +162,159 @@ function titleHasEpisode(title, ep) {
   return patterns.some((re) => re.test(title));
 }
 function looksLikeBatch(title) {
+  if (/\bs\d{1,2}e\d{1,3}\s*[-~]\s*(?:s\d{1,2})?e?\d{1,3}\b/i.test(title)) return true;
   if (/\bs\d{1,2}e\d{1,3}\b/i.test(title)) return false;
   if (/\s-\s*\d{1,4}(?:v\d)?\s*(?:\[|\(|$)/.test(title)) return false;
   return BATCH_PATTERNS.some((re) => re.test(title));
+}
+function tagAccuracy(tier, dateMs, sourceDefault) {
+  if (tier === "A") return sourceDefault;
+  if (tier === "B") return "low";
+  const days = (Date.now() - (dateMs || 0)) / 864e5;
+  if (days < 60) return sourceDefault;
+  if (days < 180) return "medium";
+  return "low";
+}
+function buildQueries(titles, opts = {}) {
+  const limit = opts.limit || 3;
+  const bases = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const title of rankTitlesForQuery(titles || [])) {
+    const q = trimTitleForQuery(title);
+    if (!q || seen.has(q)) continue;
+    seen.add(q);
+    bases.push(q);
+    if (bases.length >= limit) break;
+  }
+  if (opts.episode == null) return bases;
+  const numbered = bases.map((b) => b + " " + pad(opts.episode));
+  return [...bases, ...numbered].slice(0, opts.maxQueries || 4);
+}
+var ANILIST_API = "https://graphql.anilist.co";
+var offsetCache = /* @__PURE__ */ new Map();
+async function fetchPrequelChain(anilistId) {
+  const seen = /* @__PURE__ */ new Set();
+  const counts = [];
+  let current = Number(anilistId);
+  for (let depth = 0; depth < 12 && current && !seen.has(current); depth++) {
+    seen.add(current);
+    const body = JSON.stringify({
+      query: "query($id:Int){Media(id:$id){episodes format relations{edges{relationType node{id episodes format}}}}}",
+      variables: { id: current }
+    });
+    let media;
+    try {
+      const res = await fetch(ANILIST_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body
+      });
+      if (!res.ok) break;
+      media = (await res.json())?.data?.Media;
+    } catch {
+      break;
+    }
+    if (!media) break;
+    const prequel = (media.relations?.edges || []).filter((e) => e.relationType === "PREQUEL").map((e) => e.node).filter((n) => n && (n.format === "TV" || n.format === "ONA" || n.format === "TV_SHORT")).sort((a, b) => (b.episodes || 0) - (a.episodes || 0))[0];
+    if (!prequel || !prequel.episodes) break;
+    counts.push(prequel.episodes);
+    current = prequel.id;
+  }
+  return counts;
+}
+async function resolveEpisodeCandidates(query) {
+  const ep = Number(query.episode);
+  if (!Number.isInteger(ep) || !query.anilistId) return null;
+  const key = String(query.anilistId);
+  if (!offsetCache.has(key)) {
+    offsetCache.set(key, fetchPrequelChain(query.anilistId).catch(() => []));
+  }
+  const counts = await offsetCache.get(key);
+  const candidates = /* @__PURE__ */ new Set([ep]);
+  let running = 0;
+  for (const c of counts || []) {
+    running += c;
+    if (running >= 10) candidates.add(ep + running);
+  }
+  return candidates;
+}
+function searchContext(query, mode) {
+  const titles = query.titles || [];
+  const primary = rankTitlesForQuery(titles)[0];
+  const primaryTokens = primary ? buildTitleTokens([primary]) : /* @__PURE__ */ new Set();
+  return {
+    mode,
+    showTokens: buildTitleTokens(titles),
+    showSeason: detectShowSeason(titles),
+    showYears: detectShowYears(titles),
+    minHits: primaryTokens.size >= 3 ? 2 : 1,
+    episode: query.episode,
+    episodeCandidates: query.episodeCandidates || null,
+    exclusions: query.exclusions || [],
+    resolution: query.resolution || ""
+  };
+}
+function shapeResult(r, ctx, sourceDefault) {
+  const tier = classifyResult(r.title, ctx);
+  if (tier === null) return null;
+  const out = { ...r, _tier: tier, accuracy: tagAccuracy(tier, r.date?.getTime?.(), sourceDefault) };
+  if (tier === "B") out.type = "batch";
+  return out;
+}
+function shapeAll(items, ctx, sourceDefault) {
+  const shape = (c) => {
+    const out = [];
+    for (const r of items) {
+      const s = shapeResult(r, c, sourceDefault);
+      if (s) out.push(s);
+    }
+    return out;
+  };
+  const exact = shape({ ...ctx, episodeCandidates: null });
+  if (!ctx.episodeCandidates || ctx.episodeCandidates.size <= 1) return exact;
+  const offsetOnly = new Set(ctx.episodeCandidates);
+  offsetOnly.delete(ctx.episode);
+  if (!offsetOnly.size) return exact;
+  const newestExact = newestOf(exact);
+  const newestOffset = newestOf(shape({ ...ctx, episodeCandidates: offsetOnly }));
+  if (newestOffset == null) return exact;
+  if (newestExact != null && newestExact >= newestOffset) return exact;
+  return shape(ctx);
+}
+function newestOf(results) {
+  let newest = null;
+  for (const r of results) {
+    if (r._tier !== "A") continue;
+    const t = r.date?.getTime?.() || 0;
+    if (newest == null || t > newest) newest = t;
+  }
+  return newest;
+}
+function sortResults(results, resolution) {
+  const hasExact = results.some((r) => r._tier === "A");
+  return results.sort((a, b) => {
+    if (hasExact && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1;
+    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0);
+    if (dt !== 0) return dt;
+    if (resolution) {
+      const am = matchesResolution(a.title, resolution) ? 1 : 0;
+      const bm = matchesResolution(b.title, resolution) ? 1 : 0;
+      if (am !== bm) return bm - am;
+    }
+    return (b.seeders || 0) - (a.seeders || 0);
+  });
+}
+function finalize(results, resolution, limit = 30) {
+  return sortResults(results, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest);
+}
+async function withEpisodeCandidates(query) {
+  try {
+    const episodeCandidates = await resolveEpisodeCandidates(query);
+    if (!episodeCandidates || episodeCandidates.size <= 1) return query;
+    return { ...query, episodeCandidates };
+  } catch {
+    return query;
+  }
 }
 var GENERIC_QUERY_WORDS = /* @__PURE__ */ new Set([
   "monster",
@@ -227,6 +377,10 @@ function rankTitlesForQuery(titles) {
   const pool = latin.length ? latin : list;
   return pool.sort((a, b) => a.degenerate - b.degenerate || a.i - b.i).map((x) => x.t);
 }
+function pad(n) {
+  const s = String(n);
+  return s.length < 2 ? "0" + s : s;
+}
 function classifyResult(title, opts) {
   const showTokens = opts.showTokens;
   const minHits = opts.minHits != null ? opts.minHits : showTokens && showTokens.size >= 3 ? 2 : 1;
@@ -240,11 +394,19 @@ function classifyResult(title, opts) {
   if (opts.mode === "movie") {
     return seasonOk && yearOk ? "A" : "C";
   }
-  const epOk = opts.episode == null || titleHasEpisode(title, opts.episode);
+  const epOk = opts.episode == null || matchesAnyEpisode(title, opts);
   if (seasonOk && yearOk && epOk) {
     return isBatch ? "B" : "A";
   }
   return "C";
+}
+function matchesAnyEpisode(title, opts) {
+  const candidates = opts.episodeCandidates;
+  if (candidates && candidates.size) {
+    for (const n of candidates) if (titleHasEpisode(title, n)) return true;
+    return false;
+  }
+  return titleHasEpisode(title, opts.episode);
 }
 function matchesResolution(title, resolution) {
   if (!resolution) return true;
@@ -257,6 +419,7 @@ function hitsExclusion(title, exclusions) {
 }
 
 // src/animetosho.js
+var SOURCE_DEFAULT = "high";
 var BASE = "https://feed.animetosho.org/json";
 var MAPPING_URL = "https://raw.githubusercontent.com/anh9000/anitorrent/main/data/anilist-to-anidb.json";
 var mappingCache = null;
@@ -323,20 +486,6 @@ function toResult(item, accuracy) {
     accuracy
   };
 }
-function rank(results, resolution) {
-  const hasA = results.some((r) => r._tier === "A");
-  return results.sort((a, b) => {
-    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1;
-    if (resolution) {
-      const am = matchesResolution(a.title, resolution) ? 1 : 0;
-      const bm = matchesResolution(b.title, resolution) ? 1 : 0;
-      if (am !== bm) return bm - am;
-    }
-    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0);
-    if (dt !== 0) return dt;
-    return b.seeders - a.seeders;
-  });
-}
 function dedupe(items) {
   const seen = /* @__PURE__ */ new Set();
   const out = [];
@@ -357,16 +506,7 @@ async function fetchByAid(aid) {
 }
 async function fetchByText(titles) {
   const seen = /* @__PURE__ */ new Map();
-  const queries = [];
-  const seenQueries = /* @__PURE__ */ new Set();
-  for (const title of rankTitlesForQuery(titles)) {
-    const q = trimTitleForQuery(title);
-    if (!q || seenQueries.has(q)) continue;
-    seenQueries.add(q);
-    queries.push(q);
-    if (queries.length >= 3) break;
-  }
-  for (const q of queries) {
+  for (const q of buildQueries(titles)) {
     let items;
     try {
       items = await tryFetch(BASE + "?q=" + encodeURIComponent(q));
@@ -382,28 +522,17 @@ async function fetchByText(titles) {
   }
   return [...seen.values()];
 }
-function classifyAndTag(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears) {
-  const out = [];
-  for (const r of dedupe(raw)) {
-    if (hitsExclusion(r.title, exclusions)) continue;
-    const tier = classifyResult(r.title, { showTokens, showSeason, showYears, episode: query.episode, mode, minHits });
-    if (tier === null) continue;
-    const item = { ...r, _tier: tier };
-    if (tier !== "A") item.accuracy = "low";
-    if (tier === "B") item.type = "batch";
-    out.push(item);
+function classifyAndTag(raw, ctx) {
+  const items = dedupe(raw).filter((r) => !hitsExclusion(r.title, ctx.exclusions));
+  const out = shapeAll(items, ctx, SOURCE_DEFAULT);
+  if (ctx.mode === "batch") {
+    return out.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch", accuracy: "low" }));
   }
-  if (mode === "batch") return out.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch", accuracy: "low" }));
   return out;
 }
 async function search(query, mode) {
   if (!query) return [];
-  const exclusions = query.exclusions || [];
-  const resolution = query.resolution || "";
-  const showTokens = buildTitleTokens(query.titles || []);
-  const showSeason = detectShowSeason(query.titles || []);
-  const showYears = detectShowYears(query.titles || []);
-  const minHits = showTokens.size >= 3 ? 2 : 1;
+  const ctx = searchContext(query, mode);
   const resolvedAid = await resolveAnidbAid(query);
   let raw = [];
   if (mode === "single" && validId(query.anidbEid)) {
@@ -419,23 +548,21 @@ async function search(query, mode) {
       raw = [];
     }
   }
-  let results = classifyAndTag(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears);
-  if (!results.filter((r) => r._tier === "A").length && (query.titles || []).length) {
-    const textRaw = await fetchByText(query.titles);
-    const textResults = classifyAndTag(textRaw, query, mode, showTokens, exclusions, minHits, showSeason, showYears);
+  const results = classifyAndTag(raw, ctx);
+  if (!results.some((r) => r._tier === "A") && (query.titles || []).length) {
     const seen = new Set(results.map((r) => r.hash));
-    for (const r of textResults) {
+    for (const r of classifyAndTag(await fetchByText(query.titles), ctx)) {
       if (seen.has(r.hash)) continue;
       seen.add(r.hash);
       results.push(r);
     }
   }
-  return rank(results, resolution).slice(0, 30).map(({ _tier, ...rest }) => rest);
+  return finalize(results, ctx.resolution);
 }
 var animetosho_default = new class AnimeTosho {
   async single(query) {
     if (query.episodeCount === 1) return search(query, "movie");
-    return search(query, "single");
+    return search(await withEpisodeCandidates(query), "single");
   }
   async batch(query) {
     return search(query, "batch");

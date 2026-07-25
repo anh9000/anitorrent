@@ -4,23 +4,31 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
-## [1.6.11] - 2026-07-25 (stable)
+## [1.6.12] - 2026-07-25 (stable)
 
-Per-source bumps: `nyaa 1.0.23`, `animetosho 1.0.16`, `subsplease 1.0.14`, `yameii 1.0.20`, `toonshub 1.0.17`. Seadex unchanged. Consolidates all of today's work; supersedes v1.6.10.
+Per-source bumps: `nyaa 1.0.24`, `animetosho 1.0.17`, `subsplease 1.0.15`, `yameii 1.0.21`, `toonshub 1.0.18`. Seadex unchanged. Consolidates all of today work; supersedes v1.6.10 and v1.6.11.
 
 ### Fixed
 
-- **Per-cour AniList entries picker was showing wrong-cour stale batches instead of the currently-airing episode.** BLEACH: Thousand-Year Blood War - The Calamity is the fresh case: AniList lists it as a 10-episode entry, but release groups number files continuously across the whole Sennen Kessen-hen arc, so ep 1 of Calamity is filename ep 41 with an S17 marker. Three compounding bugs across the pipeline, all fixed in this release.
+- **Per-cour entries now resolve to the episode release groups actually name.** AniList splits long arcs into one entry per cour while release groups keep numbering continuously, so BLEACH: Thousand-Year Blood War - The Calamity ep 1 is ep 41 on nyaa. Each source now walks the AniList PREQUEL chain and accumulates episode counts (14 + 13 + 13 = 40) to recover the absolute number. Offsets under 10 are ignored so a stray one-episode special cannot make ep N also match ep N+1. Both numbering schemes are evaluated and the one whose match was uploaded more recently wins, because presence alone cannot decide: a finished cour also has an "01" file, but only the episode the user is asking for was uploaded this week.
 
-- The season detector was reading the synonym `Part 4` as season 4 (trailing-digit rule) and rejecting every S17 or unmarked release on the season filter. `Part N` is ambiguous in anime naming (sometimes a season number, sometimes a cour within a season) and the detector now skips it entirely.
+- **Season detector no longer reads "Part N" as a season number.** The synonym "Part 4" was being detected as season 4 and rejecting every S17 or unmarked release. "Part N" is ambiguous in anime naming, sometimes a season, sometimes a cour within one.
 
-- Nyaa's search was being polluted by an internal query variant that appended the episode number (`base + ' 01'`) as a second search term. On short-name shows like Bleach, that variant pulled in stale ep-01 uploads from previous cours or seasons which happened to match the episode filter, giving false-positive strict results that hid the actual current episode from the picker. Removed the episode-suffixed variant; nyaa's default date-desc sort on the base query is a more honest source of "what is available now".
+- **Range batches are recognized again.** `S01E01-S01E13` was classified as a single episode because the SxxExx check ran before the range check, so a 2-year-old cour pack was matching "episode 1" and outranking the current episode. Ranges are now detected first.
 
-- Query building was also generating duplicate search calls when multiple AniList titles all collapsed to the same trimmed query. Dedupe now applied so up to three DISTINCT queries are sent per source instead of the same one twice.
+- **Long-running shows with foreign synonyms could not match at all.** The token threshold was computed from every synonym combined, so One Piece picked up tokens from its Vietnamese and Italian names and demanded two matching tokens from titles that only ever contain "piece". No real One Piece release passed. The threshold now comes from the canonical title alone. One Piece ep 1100 went from 0 results to 30.
 
-- Result ranking rewritten. Each source now classifies every token-matched result into three tiers: exact single-episode match (top), batch containing the requested episode (middle), token-only match (bottom). When any exact match exists the tiers are honored; when none exist (per-cour entries where episode numbering does not align) all results sort by upload date descending. This is the same ordering nyaa itself uses on its site so users see today's episode uploads first instead of 491-day-old cour batches.
+- **Episode-numbered queries are built from every title, not just the first.** Feeds only return their most recent page, so an older episode is invisible to a plain title search. The lookup existed but was built from the romaji title only: "meitantei conan 1100" finds nothing while "detective conan 1100" finds the episode. Detective Conan ep 1100 went from 0 results to 30.
 
-- Verified: BLEACH TYBW: The Calamity ep 1 went from empty picker → wrong-cour stale batches → **actual today's ep-41 uploads at the top** (Lazier, DKB, Judas, VARYG AMZN, ToonsHub, AnoZu). Regression suite: 297-show offline test at 0.215% cross-franchise noise (identical baseline). Live tested: One Piece ep 1100, Frieren ep 8, Mushoku Tensei S1 ep 8 (S2-leak fix still intact), Dandadan ep 1, Vampire Hunter D: Bloodlust movie mode. All clean.
+- **Results are ordered newest-first within relevance.** Each result is tiered as an exact episode match, a batch containing it, or a title-only match. Exact matches lead when any exist; otherwise everything sorts by upload date, matching how nyaa orders its own search page. Accuracy is also age-aware, so a fresh upload is never buried under a years-old pack.
+
+### Changed
+
+- Query building, result tiering, and sorting moved into `src/lib/shared.js` (`buildQueries`, `searchContext`, `shapeAll`, `finalize`). The five sources had drifted into five near-identical copies of this logic; they now share one implementation and only keep their own fetch and parse code.
+
+### Verified
+
+- Live, all passing: BLEACH TYBW: The Calamity ep 1 (per-cour, resolves to E41 and puts today uploads on top), One Piece ep 1100, Frieren ep 8, Mushoku Tensei S1 ep 8, Jujutsu Kaisen ep 3, Detective Conan ep 1100, Attack on Titan S1 ep 5. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures. All four entry points (`test`, `single`, `batch`, `movie`) smoke tested on all six sources.
 
 ## [1.6.9] - 2026-07-24 (stable)
 

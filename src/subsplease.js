@@ -1,8 +1,9 @@
 import {
-  buildTitleTokens, trimTitleForQuery,
-  rankTitlesForQuery, matchesResolution, hitsExclusion,
-  detectShowSeason, detectShowYears, classifyResult
+  hitsExclusion, buildQueries, searchContext, classifyResult,
+  tagAccuracy, finalize, withEpisodeCandidates
 } from './lib/shared.js'
+
+const SOURCE_DEFAULT = 'high'
 
 const BASE = 'https://subsplease.org/api/'
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
@@ -83,7 +84,6 @@ function entryToResults (entry, opts) {
     const res = dl.res ? dl.res + 'p' : ''
     const title = '[SubsPlease] ' + entry.key + (res ? ' (' + res + ')' : '')
     if (hitsExclusion(title, opts.exclusions)) continue
-    const accuracy = opts.batch ? 'low' : (opts.tier === 'A' ? 'high' : 'low')
     out.push({
       title,
       link: dl.magnet,
@@ -93,36 +93,31 @@ function entryToResults (entry, opts) {
       downloads: 0,
       size,
       date,
-      accuracy,
-      type: opts.batch ? 'batch' : (opts.tier === 'B' ? 'batch' : undefined)
+      accuracy: opts.batch ? 'low' : tagAccuracy(opts.tier, date.getTime(), SOURCE_DEFAULT),
+      type: (opts.batch || opts.tier === 'B') ? 'batch' : undefined
     })
   }
   return out
 }
 
+function episodeMatchesAny (entry, query) {
+  const candidates = query.episodeCandidates
+  if (candidates && candidates.size) {
+    for (const n of candidates) if (episodeMatches(entry.episode, n)) return true
+    return false
+  }
+  return episodeMatches(entry.episode, query.episode)
+}
+
 async function runSearch (query, mode) {
   if (!query || !query.titles || !query.titles.length) return []
 
-  const showTokens = buildTitleTokens(query.titles)
-  const showSeason = detectShowSeason(query.titles)
-  const showYears = detectShowYears(query.titles)
-  const exclusions = query.exclusions || []
-  const resolution = query.resolution || ''
+  const ctx = searchContext(query, mode)
   const seenHashes = new Set()
   const seenKeys = new Set()
   const entries = []
 
-  const queries = []
-  const seenQueries = new Set()
-  for (const title of rankTitlesForQuery(query.titles)) {
-    const q = trimTitleForQuery(title)
-    if (!q || seenQueries.has(q)) continue
-    seenQueries.add(q)
-    queries.push(q)
-    if (queries.length >= 3) break
-  }
-
-  for (const q of queries) {
+  for (const q of buildQueries(query.titles, { limit: 3 })) {
     let batch
     try {
       batch = await searchApi(q)
@@ -138,42 +133,49 @@ async function runSearch (query, mode) {
     if (entries.length >= 50) break
   }
 
+  const build = useCandidates => {
+    const epCtx = useCandidates ? ctx : { ...ctx, episodeCandidates: null }
+    const shaped = []
+    for (const e of entries) {
+      const tier = classifyResult(e.key, epCtx)
+      if (tier === null) continue
+      const isBatch = isBatchEntry(e)
+      if (mode === 'batch' && !isBatch) continue
+      if (mode === 'movie' && isBatch) continue
+
+      let effectiveTier = tier
+      if (mode === 'single') {
+        if (isBatch) effectiveTier = 'B'
+        else if (tier === 'A' && !episodeMatchesAny(e, epCtx)) effectiveTier = 'C'
+      }
+      shaped.push({ entry: e, tier: effectiveTier })
+    }
+    return shaped
+  }
+
+  let shaped = build(false)
+  if (!shaped.some(s => s.tier === 'A') && ctx.episodeCandidates?.size > 1) {
+    const relaxed = build(true)
+    if (relaxed.some(s => s.tier === 'A')) shaped = relaxed
+  }
+
   const out = []
-  for (const e of entries) {
-    const tier = classifyResult(e.key, { showTokens, showSeason, showYears, episode: query.episode, mode })
-    if (tier === null) continue
-    if (mode === 'single' && isBatchEntry(e) && tier === 'A') continue
-    if (mode === 'batch' && !isBatchEntry(e)) continue
-    if (mode === 'movie' && isBatchEntry(e)) continue
-    let effectiveTier = tier
-    if (mode === 'single' && isBatchEntry(e)) effectiveTier = 'B'
-    if (mode === 'single' && !isBatchEntry(e) && tier === 'A' && !episodeMatches(e.episode, query.episode)) effectiveTier = 'C'
-    const entryOpts = { exclusions, batch: mode === 'batch', tier: effectiveTier }
-    for (const r of entryToResults(e, entryOpts)) {
+  for (const { entry, tier } of shaped) {
+    const opts = { exclusions: ctx.exclusions, batch: mode === 'batch', tier }
+    for (const r of entryToResults(entry, opts)) {
       if (seenHashes.has(r.hash)) continue
       seenHashes.add(r.hash)
-      out.push({ ...r, _tier: effectiveTier })
+      out.push({ ...r, _tier: tier })
     }
   }
 
-  const hasA = out.some(r => r._tier === 'A')
-  return out.sort((a, b) => {
-    if (hasA && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1
-    if (resolution) {
-      const am = matchesResolution(a.title, resolution) ? 1 : 0
-      const bm = matchesResolution(b.title, resolution) ? 1 : 0
-      if (am !== bm) return bm - am
-    }
-    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0)
-    if (dt !== 0) return dt
-    return b.size - a.size
-  }).slice(0, 30).map(({ _tier, ...rest }) => rest)
+  return finalize(out, ctx.resolution)
 }
 
 export default new class SubsPlease {
   async single (query) {
     if (query.episodeCount === 1) return runSearch(query, 'movie')
-    return runSearch(query, 'single')
+    return runSearch(await withEpisodeCandidates(query), 'single')
   }
   async batch (query) { return runSearch(query, 'batch') }
   async movie (query) { return runSearch(query, 'movie') }
