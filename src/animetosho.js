@@ -134,23 +134,32 @@ async function fetchByText (titles) {
 }
 
 function filterAndShape (raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears) {
-  let out = dedupe(raw)
+  // First narrow by exclusions + show tokens (hard filter, if tokens don't
+  // match, it is not this show).
+  const candidates = dedupe(raw)
     .filter(r => !hitsExclusion(r.title, exclusions))
     .filter(r => resultMatchesShow(r.title, showTokens, minHits))
+
+  let strict = candidates
     .filter(r => resultMatchesSeason(r.title, showSeason))
     .filter(r => resultMatchesYear(r.title, showYears))
 
   if (mode === 'single' && query.episode != null) {
-    out = out.filter(r => titleHasEpisode(r.title, query.episode))
+    strict = strict.filter(r => titleHasEpisode(r.title, query.episode))
   }
 
   if (mode === 'batch') {
-    out = out
+    return strict
       .filter(r => looksLikeBatch(r.title))
       .map(r => ({ ...r, type: 'batch', accuracy: 'low' }))
   }
 
-  return out
+  // Fallback: if strict returns empty (common for per-cour AniList entries
+  // like "BLEACH: The Calamity" ep 1 which is really ep 41 in filenames), fall
+  // back to token-only matches tagged as low accuracy so users can pick
+  // manually instead of seeing an empty picker.
+  if (strict.length) return strict
+  return candidates.map(r => ({ ...r, accuracy: 'low' }))
 }
 
 async function search (query, mode) {

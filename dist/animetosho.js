@@ -108,8 +108,13 @@ function detectResultSeason(title) {
   if (m) return parseInt(m[1] || m[2], 10);
   m = t.match(/\b[A-Za-z]+\s+(II|III|IV|V|VI|VII|VIII|IX|X)(?=\s|:|\.|-|$|\[|\()/);
   if (m) return ROMAN_SEASON[m[1]];
-  m = t.match(/(?:^|\s)(?:Part\s+)?([2-9])(?=\s*$|\s*[:\-|(\[])/i);
-  if (m) return parseInt(m[1], 10);
+  const digitRE = /\b([2-9])(?=\s*$|\s*[:\-|(\[])/g;
+  let dm;
+  while ((dm = digitRE.exec(t)) !== null) {
+    const before = t.slice(Math.max(0, dm.index - 8), dm.index).toLowerCase();
+    if (/\bpart\s+$/.test(before)) continue;
+    return parseInt(dm[1], 10);
+  }
   return null;
 }
 function detectShowSeason(titles) {
@@ -351,14 +356,16 @@ async function fetchByText(titles) {
   return [...seen.values()];
 }
 function filterAndShape(raw, query, mode, showTokens, exclusions, minHits, showSeason, showYears) {
-  let out = dedupe(raw).filter((r) => !hitsExclusion(r.title, exclusions)).filter((r) => resultMatchesShow(r.title, showTokens, minHits)).filter((r) => resultMatchesSeason(r.title, showSeason)).filter((r) => resultMatchesYear(r.title, showYears));
+  const candidates = dedupe(raw).filter((r) => !hitsExclusion(r.title, exclusions)).filter((r) => resultMatchesShow(r.title, showTokens, minHits));
+  let strict = candidates.filter((r) => resultMatchesSeason(r.title, showSeason)).filter((r) => resultMatchesYear(r.title, showYears));
   if (mode === "single" && query.episode != null) {
-    out = out.filter((r) => titleHasEpisode(r.title, query.episode));
+    strict = strict.filter((r) => titleHasEpisode(r.title, query.episode));
   }
   if (mode === "batch") {
-    out = out.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch", accuracy: "low" }));
+    return strict.filter((r) => looksLikeBatch(r.title)).map((r) => ({ ...r, type: "batch", accuracy: "low" }));
   }
-  return out;
+  if (strict.length) return strict;
+  return candidates.map((r) => ({ ...r, accuracy: "low" }));
 }
 async function search(query, mode) {
   if (!query) return [];

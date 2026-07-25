@@ -4,6 +4,14 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.10] - 2026-07-25 (stable)
+
+Per-source bumps: `nyaa 1.0.22`, `animetosho 1.0.15`, `subsplease 1.0.13`, `yameii 1.0.19`, `toonshub 1.0.16`. Seadex unchanged.
+
+### Fixed
+
+- **Per-cour AniList entries returned empty pickers.** BLEACH: Thousand-Year Blood War - The Calamity is a fresh case: AniList lists it as a 12-episode entry, but release groups number files continuously across the whole Sennen Kessen-hen arc, so ep 1 of Calamity is filename ep 41 with an S17 marker. Nothing was matching. Two compounding bugs, both fixed. First, the season detector was treating the synonym `Part 4` as season 4 (via the trailing-digit rule), so every actual S17/no-season release was rejected on the season filter. `Part N` is ambiguous in anime naming (sometimes a season number, sometimes a cour within a season) and the detector now skips it entirely. Second, when strict filters (season/year/episode) returned zero results, each source returned an empty array. All five sources (`nyaa`, `animetosho`, `subsplease`, `yameii`, `toonshub`) now keep the token-matched results as a fallback layer tagged `accuracy: 'low'` so Hayase's picker shows *something* to pick from instead of "No results found". Verified: BLEACH TYBW: The Calamity ep 1 went from 0 results to 30 across nyaa alone, with zero cross-franchise contamination on the offline 297-show suite.
+
 ## [1.6.9] - 2026-07-24 (stable)
 
 Per-source bumps: `nyaa 1.0.21`, `animetosho 1.0.14`, `subsplease 1.0.12`, `yameii 1.0.18`, `toonshub 1.0.15`. Seadex unchanged.

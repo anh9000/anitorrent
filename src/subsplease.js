@@ -130,8 +130,10 @@ async function runSearch (query, mode) {
     if (entries.length >= 50) break
   }
 
-  let filtered = entries
+  const candidates = entries
     .filter(e => resultMatchesShow(e.key, showTokens, showTokens.size >= 3 ? 2 : 1))
+
+  let filtered = candidates
     .filter(e => resultMatchesSeason(e.key, showSeason))
     .filter(e => resultMatchesYear(e.key, showYears))
 
@@ -143,13 +145,22 @@ async function runSearch (query, mode) {
     filtered = filtered.filter(e => !isBatchEntry(e))
   }
 
+  // Fallback for single mode: if strict returns nothing (per-cour AniList
+  // entries where the episode number does not map to release naming), return
+  // token-matching non-batch entries so user can pick manually.
+  let fallbackMarked = false
+  if (mode === 'single' && !filtered.length) {
+    filtered = candidates.filter(e => !isBatchEntry(e))
+    fallbackMarked = true
+  }
+
   const opts = { exclusions, batch: mode === 'batch' }
   const out = []
   for (const e of filtered) {
     for (const r of entryToResults(e, opts)) {
       if (seenHashes.has(r.hash)) continue
       seenHashes.add(r.hash)
-      out.push(r)
+      out.push(fallbackMarked ? { ...r, accuracy: 'low' } : r)
     }
   }
 

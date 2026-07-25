@@ -101,8 +101,13 @@ function detectResultSeason(title) {
   if (m) return parseInt(m[1] || m[2], 10);
   m = t.match(/\b[A-Za-z]+\s+(II|III|IV|V|VI|VII|VIII|IX|X)(?=\s|:|\.|-|$|\[|\()/);
   if (m) return ROMAN_SEASON[m[1]];
-  m = t.match(/(?:^|\s)(?:Part\s+)?([2-9])(?=\s*$|\s*[:\-|(\[])/i);
-  if (m) return parseInt(m[1], 10);
+  const digitRE = /\b([2-9])(?=\s*$|\s*[:\-|(\[])/g;
+  let dm;
+  while ((dm = digitRE.exec(t)) !== null) {
+    const before = t.slice(Math.max(0, dm.index - 8), dm.index).toLowerCase();
+    if (/\bpart\s+$/.test(before)) continue;
+    return parseInt(dm[1], 10);
+  }
   return null;
 }
 function detectShowSeason(titles) {
@@ -327,7 +332,8 @@ async function runSearch(query, mode) {
     }
     if (entries.length >= 50) break;
   }
-  let filtered = entries.filter((e) => resultMatchesShow(e.key, showTokens, showTokens.size >= 3 ? 2 : 1)).filter((e) => resultMatchesSeason(e.key, showSeason)).filter((e) => resultMatchesYear(e.key, showYears));
+  const candidates = entries.filter((e) => resultMatchesShow(e.key, showTokens, showTokens.size >= 3 ? 2 : 1));
+  let filtered = candidates.filter((e) => resultMatchesSeason(e.key, showSeason)).filter((e) => resultMatchesYear(e.key, showYears));
   if (mode === "single") {
     filtered = filtered.filter((e) => !isBatchEntry(e) && episodeMatches(e.episode, query.episode));
   } else if (mode === "batch") {
@@ -335,13 +341,18 @@ async function runSearch(query, mode) {
   } else if (mode === "movie") {
     filtered = filtered.filter((e) => !isBatchEntry(e));
   }
+  let fallbackMarked = false;
+  if (mode === "single" && !filtered.length) {
+    filtered = candidates.filter((e) => !isBatchEntry(e));
+    fallbackMarked = true;
+  }
   const opts = { exclusions, batch: mode === "batch" };
   const out = [];
   for (const e of filtered) {
     for (const r of entryToResults(e, opts)) {
       if (seenHashes.has(r.hash)) continue;
       seenHashes.add(r.hash);
-      out.push(r);
+      out.push(fallbackMarked ? { ...r, accuracy: "low" } : r);
     }
   }
   return out.sort((a, b) => {

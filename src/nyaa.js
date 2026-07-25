@@ -111,7 +111,15 @@ async function runSearch (query, opts) {
   const showSeason = detectShowSeason(query.titles)
   const showYears = detectShowYears(query.titles)
   const seen = new Set()
+  const seenFallback = new Set()
   const results = []
+  // Fallback: items that matched show tokens but failed season/year/episode
+  // filters. Used only when strict filters return zero, to give the user
+  // *something* to pick from instead of "No results found". Common trigger:
+  // per-cour AniList entries (e.g. "BLEACH: The Calamity" has episodes 1-10
+  // but release filenames use continuous numbering S17E41+), where our
+  // episode filter can not map between the two schemes.
+  const fallback = []
 
   const titles = rankTitlesForQuery(query.titles).slice(0, 2)
   outer: for (const title of titles) {
@@ -127,19 +135,26 @@ async function runSearch (query, opts) {
       for (const raw of items) {
         const r = itemToResult(raw, { exclusions, batch: opts.batch })
         if (!r) continue
-        if (seen.has(r.hash)) continue
         if (!resultMatchesShow(r.title, showTokens)) continue
-        if (!resultMatchesSeason(r.title, showSeason)) continue
-        if (!resultMatchesYear(r.title, showYears)) continue
-        if (opts.episode != null && !opts.batch && !opts.movie && !titleHasEpisode(r.title, opts.episode)) continue
-        seen.add(r.hash)
-        results.push(r)
+        const strictOk =
+          resultMatchesSeason(r.title, showSeason) &&
+          resultMatchesYear(r.title, showYears) &&
+          (opts.episode == null || opts.batch || opts.movie || titleHasEpisode(r.title, opts.episode))
+        if (strictOk) {
+          if (seen.has(r.hash)) continue
+          seen.add(r.hash)
+          results.push(r)
+        } else if (!seenFallback.has(r.hash)) {
+          seenFallback.add(r.hash)
+          fallback.push({ ...r, accuracy: 'low' })
+        }
       }
     }
     if (results.length >= 20) break
   }
 
-  return rankResults(results, resolution).slice(0, 30)
+  const final = results.length ? results : fallback
+  return rankResults(final, resolution).slice(0, 30)
 }
 
 export default new class Nyaa {
@@ -160,7 +175,7 @@ export default new class Nyaa {
       // single-episode results. Users resuming a specific episode almost always
       // want the single-episode release, not a season pack. Seadex's curated
       // "best release" tag comes through type: 'best' from a different path and
-      // is unaffected — those stay at their normal tier.
+      // is unaffected, those stay at their normal tier.
       .map(r => ({ ...r, type: 'batch', accuracy: 'low' }))
   }
 

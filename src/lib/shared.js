@@ -154,11 +154,19 @@ export function detectResultSeason (title) {
   // Trailing Roman numeral after a word: "Foo II", "Die Neue These IV"
   m = t.match(/\b[A-Za-z]+\s+(II|III|IV|V|VI|VII|VIII|IX|X)(?=\s|:|\.|-|$|\[|\()/)
   if (m) return ROMAN_SEASON[m[1]]
-  // Trailing single digit 2-9 at end / before delimiter, not part of a year
-  // (2019, 2024...) or codec tag (x265, x264). Requires a word boundary after
-  // and no digit or dash immediately before, so we skip "1080p", "S1", "4th".
-  m = t.match(/(?:^|\s)(?:Part\s+)?([2-9])(?=\s*$|\s*[:\-|(\[])/i)
-  if (m) return parseInt(m[1], 10)
+  // Trailing single digit 2-9 at end / before delimiter, but SKIP when
+  // preceded by "Part". "Part N" is ambiguous in anime naming: sometimes it
+  // means season number, sometimes a cour within a season (e.g. "BLEACH TYBW
+  // Part 4" is cour 4 of season 1 of the arc but release groups use S17
+  // continuous numbering, not "Part 4"). Detecting "Part N" as a season marker
+  // caused every real release to be rejected. Rest of the pattern is unchanged.
+  const digitRE = /\b([2-9])(?=\s*$|\s*[:\-|(\[])/g
+  let dm
+  while ((dm = digitRE.exec(t)) !== null) {
+    const before = t.slice(Math.max(0, dm.index - 8), dm.index).toLowerCase()
+    if (/\bpart\s+$/.test(before)) continue
+    return parseInt(dm[1], 10)
+  }
   return null
 }
 
@@ -191,7 +199,7 @@ export function resultMatchesSeason (title, showSeason) {
   return !rs || rs === 1
 }
 
-// Year detection — used to disambiguate franchise siblings released in
+// Year detection, used to disambiguate franchise siblings released in
 // different years. AniList often puts the year in the show's title itself
 // ("Vampire Hunter D (2000)", "Hunter x Hunter (2011)"), and release filenames
 // commonly include the year too ("Vampire.Hunter.D.1985.1080p..."). If the

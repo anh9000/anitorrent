@@ -111,7 +111,9 @@ async function runSearch (query, opts) {
   const showSeason = detectShowSeason(query.titles)
   const showYears = detectShowYears(query.titles)
   const seen = new Set()
+  const seenFallback = new Set()
   const results = []
+  const fallback = []
 
   const titles = rankTitlesForQuery(query.titles).slice(0, 2)
   for (const title of titles) {
@@ -127,11 +129,19 @@ async function runSearch (query, opts) {
       for (const raw of items) {
         const r = itemToResult(raw, { exclusions })
         if (!r) continue
-        if (seen.has(r.hash)) continue
         if (!resultMatchesShow(r.title, showTokens)) continue
-        if (!resultMatchesSeason(r.title, showSeason)) continue
-        if (!resultMatchesYear(r.title, showYears)) continue
-        if (opts.episode != null && !opts.batch && !opts.movie && !titleHasEpisode(r.title, opts.episode)) continue
+        const strictOk =
+          resultMatchesSeason(r.title, showSeason) &&
+          resultMatchesYear(r.title, showYears) &&
+          (opts.episode == null || opts.batch || opts.movie || titleHasEpisode(r.title, opts.episode))
+        if (!strictOk) {
+          if (!seenFallback.has(r.hash)) {
+            seenFallback.add(r.hash)
+            fallback.push({ ...r, accuracy: 'low' })
+          }
+          continue
+        }
+        if (seen.has(r.hash)) continue
         seen.add(r.hash)
         results.push(r)
       }
@@ -139,7 +149,8 @@ async function runSearch (query, opts) {
     if (results.length >= 10) break
   }
 
-  return rankResults(results, resolution).slice(0, 30)
+  const final = results.length ? results : fallback
+  return rankResults(final, resolution).slice(0, 30)
 }
 
 export default new class ToonsHub {

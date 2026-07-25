@@ -2,12 +2,14 @@
   {
     "name": "Nyaa",
     "id": "anitorrent.nyaa",
-    "version": "1.0.21",
+    "version": "1.0.22",
     "type": "torrent",
     "accuracy": "medium",
     "ratio": 0,
     "media": "both",
-    "languages": ["ALL"],
+    "languages": [
+      "ALL"
+    ],
     "icon": "https://nyaa.si/static/favicon.png",
     "description": "Searches nyaa.si directly for anime torrents.",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
@@ -16,12 +18,14 @@
   {
     "name": "AnimeTosho",
     "id": "anitorrent.animetosho",
-    "version": "1.0.14",
+    "version": "1.0.15",
     "type": "torrent",
     "accuracy": "high",
     "ratio": 0,
     "media": "both",
-    "languages": ["ALL"],
+    "languages": [
+      "ALL"
+    ],
     "icon": "https://animetosho.org/favicon.ico",
     "description": "Aggregator with anidb episode-ID mapping.",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
@@ -35,7 +39,9 @@
     "accuracy": "high",
     "ratio": 0,
     "media": "both",
-    "languages": ["ALL"],
+    "languages": [
+      "ALL"
+    ],
     "icon": "https://releases.moe/favicon.png",
     "description": "Manually curated best releases per anime.",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
@@ -44,12 +50,14 @@
   {
     "name": "SubsPlease",
     "id": "anitorrent.subsplease",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "type": "torrent",
     "accuracy": "high",
     "ratio": 0,
     "media": "both",
-    "languages": ["ALL"],
+    "languages": [
+      "ALL"
+    ],
     "icon": "https://subsplease.org/favicon.ico",
     "description": "Direct API for currently-airing weekly fansubs from SubsPlease.",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
@@ -58,12 +66,14 @@
   {
     "name": "Yameii (Dubs)",
     "id": "anitorrent.yameii",
-    "version": "1.0.18",
+    "version": "1.0.19",
     "type": "torrent",
     "accuracy": "high",
     "ratio": 0,
     "media": "both",
-    "languages": ["ALL"],
+    "languages": [
+      "ALL"
+    ],
     "icon": "https://nyaa.si/static/favicon.png",
     "description": "English dub uploads from Yameii on nyaa.si.",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",
@@ -72,12 +82,14 @@
   {
     "name": "ToonsHub",
     "id": "anitorrent.toonshub",
-    "version": "1.0.15",
+    "version": "1.0.16",
     "type": "torrent",
     "accuracy": "high",
     "ratio": 0,
     "media": "both",
-    "languages": ["ALL"],
+    "languages": [
+      "ALL"
+    ],
     "icon": "https://nyaa.si/static/favicon.png",
     "description": "ToonsHub group releases on nyaa.si. Group's Telegram: t.me/thtorrents.",
     "update": "https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json",

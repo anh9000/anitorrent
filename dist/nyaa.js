@@ -151,8 +151,13 @@ function detectResultSeason(title) {
   if (m) return parseInt(m[1] || m[2], 10);
   m = t.match(/\b[A-Za-z]+\s+(II|III|IV|V|VI|VII|VIII|IX|X)(?=\s|:|\.|-|$|\[|\()/);
   if (m) return ROMAN_SEASON[m[1]];
-  m = t.match(/(?:^|\s)(?:Part\s+)?([2-9])(?=\s*$|\s*[:\-|(\[])/i);
-  if (m) return parseInt(m[1], 10);
+  const digitRE = /\b([2-9])(?=\s*$|\s*[:\-|(\[])/g;
+  let dm;
+  while ((dm = digitRE.exec(t)) !== null) {
+    const before = t.slice(Math.max(0, dm.index - 8), dm.index).toLowerCase();
+    if (/\bpart\s+$/.test(before)) continue;
+    return parseInt(dm[1], 10);
+  }
   return null;
 }
 function detectShowSeason(titles) {
@@ -425,7 +430,9 @@ async function runSearch(query, opts) {
   const showSeason = detectShowSeason(query.titles);
   const showYears = detectShowYears(query.titles);
   const seen = /* @__PURE__ */ new Set();
+  const seenFallback = /* @__PURE__ */ new Set();
   const results = [];
+  const fallback = [];
   const titles = rankTitlesForQuery(query.titles).slice(0, 2);
   outer: for (const title of titles) {
     const variants = queryVariantsForTitle(title, opts);
@@ -440,18 +447,22 @@ async function runSearch(query, opts) {
       for (const raw of items) {
         const r = itemToResult(raw, { exclusions, batch: opts.batch });
         if (!r) continue;
-        if (seen.has(r.hash)) continue;
         if (!resultMatchesShow(r.title, showTokens)) continue;
-        if (!resultMatchesSeason(r.title, showSeason)) continue;
-        if (!resultMatchesYear(r.title, showYears)) continue;
-        if (opts.episode != null && !opts.batch && !opts.movie && !titleHasEpisode(r.title, opts.episode)) continue;
-        seen.add(r.hash);
-        results.push(r);
+        const strictOk = resultMatchesSeason(r.title, showSeason) && resultMatchesYear(r.title, showYears) && (opts.episode == null || opts.batch || opts.movie || titleHasEpisode(r.title, opts.episode));
+        if (strictOk) {
+          if (seen.has(r.hash)) continue;
+          seen.add(r.hash);
+          results.push(r);
+        } else if (!seenFallback.has(r.hash)) {
+          seenFallback.add(r.hash);
+          fallback.push({ ...r, accuracy: "low" });
+        }
       }
     }
     if (results.length >= 20) break;
   }
-  return rankResults(results, resolution).slice(0, 30);
+  const final = results.length ? results : fallback;
+  return rankResults(final, resolution).slice(0, 30);
 }
 var nyaa_default = new class Nyaa {
   async single(query) {
