@@ -99,22 +99,24 @@ async function fetchByAid (aid) {
   return items.map(i => toResult(i, 'high')).filter(Boolean)
 }
 
-async function fetchByText (titles) {
+// AnimeTosho's search endpoint is slow and serializes concurrent requests, so
+// the query count is kept low and the episode-numbered round only runs when the
+// plain titles did not already turn up the episode.
+async function fetchByText (titles, episode, foundEpisode) {
+  const { bases, numbered } = buildQueries(titles, { limit: 2, episode })
   const seen = new Map()
-  for (const q of buildQueries(titles)) {
-    let items
-    try {
-      items = await tryFetch(BASE + '?q=' + encodeURIComponent(q))
-    } catch (err) {
-      if (seen.size) break
-      throw err
+  const run = async qs => {
+    const settled = await Promise.allSettled(qs.map(q => tryFetch(BASE + '?q=' + encodeURIComponent(q))))
+    for (const s of settled) {
+      if (s.status !== 'fulfilled') continue
+      for (const i of s.value) {
+        const r = toResult(i, 'medium')
+        if (r && !seen.has(r.hash)) seen.set(r.hash, r)
+      }
     }
-    for (const i of items) {
-      const r = toResult(i, 'medium')
-      if (r && !seen.has(r.hash)) seen.set(r.hash, r)
-    }
-    if (seen.size >= 30) break
   }
+  await run(bases)
+  if (numbered.length && !foundEpisode([...seen.values()])) await run(numbered)
   return [...seen.values()]
 }
 
@@ -145,14 +147,15 @@ async function search (query, mode) {
 
   if (!results.some(r => r._tier === 'A') && (query.titles || []).length) {
     const seen = new Set(results.map(r => r.hash))
-    for (const r of classifyAndTag(await fetchByText(query.titles), ctx)) {
+    const foundEpisode = items => classifyAndTag(items, ctx).some(r => r._tier === 'A')
+    for (const r of classifyAndTag(await fetchByText(query.titles, query.episode, foundEpisode), ctx)) {
       if (seen.has(r.hash)) continue
       seen.add(r.hash)
       results.push(r)
     }
   }
 
-  return finalize(results, ctx.resolution)
+  return finalize(results, ctx)
 }
 
 export default new class AnimeTosho {

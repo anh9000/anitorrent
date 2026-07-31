@@ -229,9 +229,36 @@ function buildQueries(titles, opts = {}) {
     bases.push(q);
     if (bases.length >= limit) break;
   }
-  if (opts.episode == null) return bases;
-  const numbered = bases.map((b) => b + " " + pad(opts.episode));
-  return [...bases, ...numbered].slice(0, opts.maxQueries || 4);
+  const numbered = opts.episode == null ? [] : bases.map((b) => b + " " + pad(opts.episode));
+  return { bases, numbered };
+}
+async function collectFeed(queries, fetchItems, mapItem, ctx, sourceDefault) {
+  const seen = /* @__PURE__ */ new Set();
+  const collected = [];
+  let shaped = [];
+  let lastError = null;
+  const phase = async (qs) => {
+    const settled = await Promise.allSettled(qs.map((q) => fetchItems(q)));
+    for (const s of settled) {
+      if (s.status === "rejected") {
+        lastError = s.reason;
+        continue;
+      }
+      for (const raw of s.value) {
+        const r = mapItem(raw);
+        if (!r || seen.has(r.hash)) continue;
+        seen.add(r.hash);
+        collected.push(r);
+      }
+    }
+    shaped = shapeAll(collected, ctx, sourceDefault);
+  };
+  await phase(queries.bases);
+  if (!collected.length && lastError) throw lastError;
+  if (queries.numbered.length && !shaped.some((r) => r._tier === "A")) {
+    await phase(queries.numbered);
+  }
+  return shaped;
 }
 var ANILIST_API = "https://graphql.anilist.co";
 var offsetCache = /* @__PURE__ */ new Map();
@@ -314,15 +341,18 @@ function shapeAll(items, ctx, sourceDefault) {
     return out;
   };
   const exact = shape({ ...ctx, episodeCandidates: null });
+  if (ctx.episode != null) ctx.chosenEpisodes = /* @__PURE__ */ new Set([ctx.episode]);
   if (!ctx.episodeCandidates || ctx.episodeCandidates.size <= 1) return exact;
   let best = null;
   for (const n of ctx.episodeCandidates) {
     const shaped = shape({ ...ctx, episodeCandidates: /* @__PURE__ */ new Set([n]) });
     const newest = newestOf(shaped);
     if (newest == null) continue;
-    if (!best || newest > best.newest) best = { newest, shaped };
+    if (!best || newest > best.newest) best = { newest, shaped, episode: n };
   }
-  return best ? best.shaped : exact;
+  if (!best) return exact;
+  ctx.chosenEpisodes = /* @__PURE__ */ new Set([best.episode]);
+  return best.shaped;
 }
 function newestOf(results) {
   let newest = null;
@@ -347,9 +377,52 @@ function sortResults(results, resolution) {
     return (b.seeders || 0) - (a.seeders || 0);
   });
 }
-function finalize(results, resolution, limit = 30) {
-  const kept = results.some((r) => r._tier === "A") ? results.filter((r) => r._tier !== "C") : results;
+function titleEpisodeMarkers(title) {
+  const out = [];
+  const push = (a, b) => {
+    const lo = parseInt(a, 10);
+    const hi = b == null ? lo : parseInt(b, 10);
+    if (Number.isInteger(lo)) out.push([lo, Number.isInteger(hi) ? hi : lo]);
+  };
+  let m;
+  const se = /\bs\d{1,2}e(\d{1,4})(?:\s*[-~]\s*(?:s\d{1,2})?e(\d{1,4}))?\b/gi;
+  while ((m = se.exec(title)) !== null) push(m[1], m[2]);
+  const ep = /\bep(?:isode)?\.?\s*(\d{1,4})\b/gi;
+  while ((m = ep.exec(title)) !== null) push(m[1], null);
+  const dash = /[\s._]-\s*(\d{1,4})(?:v\d)?\s*(?=[[(]|$)/g;
+  while ((m = dash.exec(title)) !== null) push(m[1], null);
+  const range = /\b(\d{1,4})\s*[-~]\s*(\d{1,4})\b/g;
+  while ((m = range.exec(title)) !== null) {
+    const a = parseInt(m[1], 10);
+    const b = parseInt(m[2], 10);
+    if (b > a && b - a < 400) push(m[1], m[2]);
+  }
+  return out;
+}
+function hasConflictingEpisode(title, wanted) {
+  if (!wanted || !wanted.size) return false;
+  const markers = titleEpisodeMarkers(title);
+  if (!markers.length) return false;
+  for (const [lo, hi] of markers) {
+    for (const w of wanted) if (w >= lo && w <= hi) return false;
+  }
+  return true;
+}
+function finalize(results, ctx, limit = 30) {
+  const resolution = typeof ctx === "string" ? ctx : ctx && ctx.resolution || "";
+  const hasExact = results.some((r) => r._tier === "A");
+  let kept;
+  if (hasExact) {
+    kept = results.filter((r) => r._tier !== "C");
+  } else {
+    const wanted = typeof ctx === "string" ? null : wantedEpisodes(ctx);
+    kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).map((r) => ({ ...r, accuracy: "low" }));
+  }
   return sortResults(kept, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest);
+}
+function wantedEpisodes(ctx) {
+  if (!ctx || ctx.mode !== "single" || ctx.episode == null) return null;
+  return ctx.chosenEpisodes || /* @__PURE__ */ new Set([ctx.episode]);
 }
 async function withEpisodeCandidates(query) {
   try {
@@ -586,27 +659,15 @@ async function runSearch(query, opts) {
   if (!query.titles || !query.titles.length) return [];
   const mode = opts.batch ? "batch" : opts.movie ? "movie" : "single";
   const ctx = searchContext(query, mode);
-  const seen = /* @__PURE__ */ new Set();
-  const collected = [];
-  let shaped = [];
-  for (const q of buildQueries(query.titles, { limit: 2, episode: opts.episode })) {
-    let items;
-    try {
-      items = await rssSearchWithRetry(q);
-    } catch (err) {
-      if (collected.length) break;
-      throw err;
-    }
-    for (const raw of items) {
-      const r = itemToResult(raw, { exclusions: ctx.exclusions });
-      if (!r || seen.has(r.hash)) continue;
-      seen.add(r.hash);
-      collected.push(r);
-    }
-    shaped = shapeAll(collected, ctx, SOURCE_DEFAULT);
-    if (shaped.filter((r) => r._tier === "A").length >= 10) break;
-  }
-  return finalize(shaped, ctx.resolution);
+  const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode });
+  const shaped = await collectFeed(
+    queries,
+    rssSearchWithRetry,
+    (raw) => itemToResult(raw, { exclusions: ctx.exclusions }),
+    ctx,
+    SOURCE_DEFAULT
+  );
+  return finalize(shaped, ctx);
 }
 var toonshub_default = new class ToonsHub {
   async single(query) {

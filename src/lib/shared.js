@@ -279,12 +279,45 @@ export function buildQueries (titles, opts = {}) {
     bases.push(q)
     if (bases.length >= limit) break
   }
-  if (opts.episode == null) return bases
-  // Every base title gets an episode-numbered form, not just the first: groups
-  // name files after whichever title they prefer, so "meitantei conan 1100"
-  // finds nothing while "detective conan 1100" finds the episode.
-  const numbered = bases.map(b => b + ' ' + pad(opts.episode))
-  return [...bases, ...numbered].slice(0, opts.maxQueries || 4)
+  // Every base title also gets an episode-numbered form, not just the first:
+  // groups name files after whichever title they prefer, so "meitantei conan
+  // 1100" finds nothing while "detective conan 1100" finds the episode. These
+  // are a second phase, not extra work up front, since a feed's recent page
+  // already holds the current episode of an airing show.
+  const numbered = opts.episode == null ? [] : bases.map(b => b + ' ' + pad(opts.episode))
+  return { bases, numbered }
+}
+
+// Fetch in two phases. The base queries go out together, and the numbered ones
+// only run if those found no exact match, which is the case for an older
+// episode that has fallen off the feed's recent page. An airing show settles in
+// one round of parallel requests instead of four sequential ones.
+export async function collectFeed (queries, fetchItems, mapItem, ctx, sourceDefault) {
+  const seen = new Set()
+  const collected = []
+  let shaped = []
+  let lastError = null
+
+  const phase = async qs => {
+    const settled = await Promise.allSettled(qs.map(q => fetchItems(q)))
+    for (const s of settled) {
+      if (s.status === 'rejected') { lastError = s.reason; continue }
+      for (const raw of s.value) {
+        const r = mapItem(raw)
+        if (!r || seen.has(r.hash)) continue
+        seen.add(r.hash)
+        collected.push(r)
+      }
+    }
+    shaped = shapeAll(collected, ctx, sourceDefault)
+  }
+
+  await phase(queries.bases)
+  if (!collected.length && lastError) throw lastError
+  if (queries.numbered.length && !shaped.some(r => r._tier === 'A')) {
+    await phase(queries.numbered)
+  }
+  return shaped
 }
 
 const ANILIST_API = 'https://graphql.anilist.co'
@@ -400,6 +433,7 @@ export function shapeAll (items, ctx, sourceDefault) {
     return out
   }
   const exact = shape({ ...ctx, episodeCandidates: null })
+  if (ctx.episode != null) ctx.chosenEpisodes = new Set([ctx.episode])
   if (!ctx.episodeCandidates || ctx.episodeCandidates.size <= 1) return exact
 
   // Only one candidate can be right. Each cour boundary in the chain produces
@@ -412,9 +446,11 @@ export function shapeAll (items, ctx, sourceDefault) {
     const shaped = shape({ ...ctx, episodeCandidates: new Set([n]) })
     const newest = newestOf(shaped)
     if (newest == null) continue
-    if (!best || newest > best.newest) best = { newest, shaped }
+    if (!best || newest > best.newest) best = { newest, shaped, episode: n }
   }
-  return best ? best.shaped : exact
+  if (!best) return exact
+  ctx.chosenEpisodes = new Set([best.episode])
+  return best.shaped
 }
 
 function newestOf (results) {
@@ -445,15 +481,73 @@ export function sortResults (results, resolution) {
   })
 }
 
+// Episode numbers a filename states outright, as [from, to] pairs so a range
+// covers everything inside it. Only high-confidence forms are read: a title
+// with no recognizable marker yields nothing and is never treated as wrong.
+export function titleEpisodeMarkers (title) {
+  const out = []
+  const push = (a, b) => {
+    const lo = parseInt(a, 10)
+    const hi = b == null ? lo : parseInt(b, 10)
+    if (Number.isInteger(lo)) out.push([lo, Number.isInteger(hi) ? hi : lo])
+  }
+  let m
+  const se = /\bs\d{1,2}e(\d{1,4})(?:\s*[-~]\s*(?:s\d{1,2})?e(\d{1,4}))?\b/gi
+  while ((m = se.exec(title)) !== null) push(m[1], m[2])
+  const ep = /\bep(?:isode)?\.?\s*(\d{1,4})\b/gi
+  while ((m = ep.exec(title)) !== null) push(m[1], null)
+  const dash = /[\s._]-\s*(\d{1,4})(?:v\d)?\s*(?=[[(]|$)/g
+  while ((m = dash.exec(title)) !== null) push(m[1], null)
+  const range = /\b(\d{1,4})\s*[-~]\s*(\d{1,4})\b/g
+  while ((m = range.exec(title)) !== null) {
+    const a = parseInt(m[1], 10)
+    const b = parseInt(m[2], 10)
+    if (b > a && b - a < 400) push(m[1], m[2])
+  }
+  return out
+}
+
+// True when the filename names an episode and none of them is the one wanted.
+// A dub source sitting on ep 2 while ep 4 is being asked for is not a weaker
+// match for ep 4, it is a different episode, and Hayase merges every source
+// into one list where it would sit beside the real thing.
+export function hasConflictingEpisode (title, wanted) {
+  if (!wanted || !wanted.size) return false
+  const markers = titleEpisodeMarkers(title)
+  if (!markers.length) return false
+  for (const [lo, hi] of markers) {
+    for (const w of wanted) if (w >= lo && w <= hi) return false
+  }
+  return true
+}
+
 // Title-only matches are dropped once a real episode match exists: they are
 // other episodes of the same show, which is noise when a specific one was
-// asked for. They are kept only when nothing matched, where an approximate
-// list still beats an empty picker.
-export function finalize (results, resolution, limit = 30) {
-  const kept = results.some(r => r._tier === 'A')
-    ? results.filter(r => r._tier !== 'C')
-    : results
+// asked for.
+//
+// When nothing matched, what is left is a guess, so it is capped at low
+// accuracy: another source that did find the episode has to outrank it in the
+// merged picker. Guesses that name a different episode outright are dropped
+// outright. Ones with no episode in the name (packs, movies, unlabelled rips)
+// stay, which is what keeps the picker from going empty.
+export function finalize (results, ctx, limit = 30) {
+  const resolution = typeof ctx === 'string' ? ctx : (ctx && ctx.resolution) || ''
+  const hasExact = results.some(r => r._tier === 'A')
+  let kept
+  if (hasExact) {
+    kept = results.filter(r => r._tier !== 'C')
+  } else {
+    const wanted = typeof ctx === 'string' ? null : wantedEpisodes(ctx)
+    kept = results
+      .filter(r => !hasConflictingEpisode(r.title, wanted))
+      .map(r => ({ ...r, accuracy: 'low' }))
+  }
   return sortResults(kept, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest)
+}
+
+function wantedEpisodes (ctx) {
+  if (!ctx || ctx.mode !== 'single' || ctx.episode == null) return null
+  return ctx.chosenEpisodes || new Set([ctx.episode])
 }
 
 // Attach absolute-numbering candidates so per-cour entries match the filenames

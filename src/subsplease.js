@@ -117,21 +117,19 @@ async function runSearch (query, mode) {
   const seenKeys = new Set()
   const entries = []
 
-  for (const q of buildQueries(query.titles, { limit: 3 })) {
-    let batch
-    try {
-      batch = await searchApi(q)
-    } catch (err) {
-      if (entries.length) break
-      throw err
-    }
-    for (const e of batch) {
+  const settled = await Promise.allSettled(
+    buildQueries(query.titles, { limit: 3 }).bases.map(q => searchApi(q))
+  )
+  let lastError = null
+  for (const s of settled) {
+    if (s.status === 'rejected') { lastError = s.reason; continue }
+    for (const e of s.value) {
       if (seenKeys.has(e.key)) continue
       seenKeys.add(e.key)
       entries.push(e)
     }
-    if (entries.length >= 50) break
   }
+  if (!entries.length && lastError) throw lastError
 
   const build = useCandidates => {
     const epCtx = useCandidates ? ctx : { ...ctx, episodeCandidates: null }
@@ -169,7 +167,7 @@ async function runSearch (query, mode) {
     }
   }
 
-  return finalize(out, ctx.resolution)
+  return finalize(out, ctx)
 }
 
 export default new class SubsPlease {

@@ -186,9 +186,8 @@ function buildQueries(titles, opts = {}) {
     bases.push(q);
     if (bases.length >= limit) break;
   }
-  if (opts.episode == null) return bases;
-  const numbered = bases.map((b) => b + " " + pad(opts.episode));
-  return [...bases, ...numbered].slice(0, opts.maxQueries || 4);
+  const numbered = opts.episode == null ? [] : bases.map((b) => b + " " + pad(opts.episode));
+  return { bases, numbered };
 }
 var ANILIST_API = "https://graphql.anilist.co";
 var offsetCache = /* @__PURE__ */ new Map();
@@ -271,15 +270,18 @@ function shapeAll(items, ctx, sourceDefault) {
     return out;
   };
   const exact = shape({ ...ctx, episodeCandidates: null });
+  if (ctx.episode != null) ctx.chosenEpisodes = /* @__PURE__ */ new Set([ctx.episode]);
   if (!ctx.episodeCandidates || ctx.episodeCandidates.size <= 1) return exact;
   let best = null;
   for (const n of ctx.episodeCandidates) {
     const shaped = shape({ ...ctx, episodeCandidates: /* @__PURE__ */ new Set([n]) });
     const newest = newestOf(shaped);
     if (newest == null) continue;
-    if (!best || newest > best.newest) best = { newest, shaped };
+    if (!best || newest > best.newest) best = { newest, shaped, episode: n };
   }
-  return best ? best.shaped : exact;
+  if (!best) return exact;
+  ctx.chosenEpisodes = /* @__PURE__ */ new Set([best.episode]);
+  return best.shaped;
 }
 function newestOf(results) {
   let newest = null;
@@ -304,9 +306,52 @@ function sortResults(results, resolution) {
     return (b.seeders || 0) - (a.seeders || 0);
   });
 }
-function finalize(results, resolution, limit = 30) {
-  const kept = results.some((r) => r._tier === "A") ? results.filter((r) => r._tier !== "C") : results;
+function titleEpisodeMarkers(title) {
+  const out = [];
+  const push = (a, b) => {
+    const lo = parseInt(a, 10);
+    const hi = b == null ? lo : parseInt(b, 10);
+    if (Number.isInteger(lo)) out.push([lo, Number.isInteger(hi) ? hi : lo]);
+  };
+  let m;
+  const se = /\bs\d{1,2}e(\d{1,4})(?:\s*[-~]\s*(?:s\d{1,2})?e(\d{1,4}))?\b/gi;
+  while ((m = se.exec(title)) !== null) push(m[1], m[2]);
+  const ep = /\bep(?:isode)?\.?\s*(\d{1,4})\b/gi;
+  while ((m = ep.exec(title)) !== null) push(m[1], null);
+  const dash = /[\s._]-\s*(\d{1,4})(?:v\d)?\s*(?=[[(]|$)/g;
+  while ((m = dash.exec(title)) !== null) push(m[1], null);
+  const range = /\b(\d{1,4})\s*[-~]\s*(\d{1,4})\b/g;
+  while ((m = range.exec(title)) !== null) {
+    const a = parseInt(m[1], 10);
+    const b = parseInt(m[2], 10);
+    if (b > a && b - a < 400) push(m[1], m[2]);
+  }
+  return out;
+}
+function hasConflictingEpisode(title, wanted) {
+  if (!wanted || !wanted.size) return false;
+  const markers = titleEpisodeMarkers(title);
+  if (!markers.length) return false;
+  for (const [lo, hi] of markers) {
+    for (const w of wanted) if (w >= lo && w <= hi) return false;
+  }
+  return true;
+}
+function finalize(results, ctx, limit = 30) {
+  const resolution = typeof ctx === "string" ? ctx : ctx && ctx.resolution || "";
+  const hasExact = results.some((r) => r._tier === "A");
+  let kept;
+  if (hasExact) {
+    kept = results.filter((r) => r._tier !== "C");
+  } else {
+    const wanted = typeof ctx === "string" ? null : wantedEpisodes(ctx);
+    kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).map((r) => ({ ...r, accuracy: "low" }));
+  }
   return sortResults(kept, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest);
+}
+function wantedEpisodes(ctx) {
+  if (!ctx || ctx.mode !== "single" || ctx.episode == null) return null;
+  return ctx.chosenEpisodes || /* @__PURE__ */ new Set([ctx.episode]);
 }
 async function withEpisodeCandidates(query) {
   try {
@@ -505,22 +550,21 @@ async function fetchByAid(aid) {
   const items = await tryFetch(BASE + "?aid=" + encodeURIComponent(aid));
   return items.map((i) => toResult(i, "high")).filter(Boolean);
 }
-async function fetchByText(titles) {
+async function fetchByText(titles, episode, foundEpisode) {
+  const { bases, numbered } = buildQueries(titles, { limit: 2, episode });
   const seen = /* @__PURE__ */ new Map();
-  for (const q of buildQueries(titles)) {
-    let items;
-    try {
-      items = await tryFetch(BASE + "?q=" + encodeURIComponent(q));
-    } catch (err) {
-      if (seen.size) break;
-      throw err;
+  const run = async (qs) => {
+    const settled = await Promise.allSettled(qs.map((q) => tryFetch(BASE + "?q=" + encodeURIComponent(q))));
+    for (const s of settled) {
+      if (s.status !== "fulfilled") continue;
+      for (const i of s.value) {
+        const r = toResult(i, "medium");
+        if (r && !seen.has(r.hash)) seen.set(r.hash, r);
+      }
     }
-    for (const i of items) {
-      const r = toResult(i, "medium");
-      if (r && !seen.has(r.hash)) seen.set(r.hash, r);
-    }
-    if (seen.size >= 30) break;
-  }
+  };
+  await run(bases);
+  if (numbered.length && !foundEpisode([...seen.values()])) await run(numbered);
   return [...seen.values()];
 }
 function classifyAndTag(raw, ctx) {
@@ -552,13 +596,14 @@ async function search(query, mode) {
   const results = classifyAndTag(raw, ctx);
   if (!results.some((r) => r._tier === "A") && (query.titles || []).length) {
     const seen = new Set(results.map((r) => r.hash));
-    for (const r of classifyAndTag(await fetchByText(query.titles), ctx)) {
+    const foundEpisode = (items) => classifyAndTag(items, ctx).some((r) => r._tier === "A");
+    for (const r of classifyAndTag(await fetchByText(query.titles, query.episode, foundEpisode), ctx)) {
       if (seen.has(r.hash)) continue;
       seen.add(r.hash);
       results.push(r);
     }
   }
-  return finalize(results, ctx.resolution);
+  return finalize(results, ctx);
 }
 var animetosho_default = new class AnimeTosho {
   async single(query) {

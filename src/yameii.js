@@ -1,6 +1,6 @@
 import {
   looksLikeBatch, hitsExclusion, buildMagnet, parseSize, pickTag, pickItems,
-  httpGet, checkNyaaFeed, buildQueries, searchContext, shapeAll, finalize,
+  httpGet, checkNyaaFeed, buildQueries, searchContext, finalize, collectFeed,
   withEpisodeCandidates
 } from './lib/shared.js'
 
@@ -89,29 +89,15 @@ async function runSearch (query, opts) {
 
   const mode = opts.batch ? 'batch' : (opts.movie ? 'movie' : 'single')
   const ctx = searchContext(query, mode)
-  const seen = new Set()
-  const collected = []
-  let shaped = []
-
-  for (const q of buildQueries(query.titles, { limit: 2, episode: opts.episode })) {
-    let items
-    try {
-      items = await rssSearchWithRetry(q)
-    } catch (err) {
-      if (collected.length) break
-      throw err
-    }
-    for (const raw of items) {
-      const r = itemToResult(raw, { exclusions: ctx.exclusions })
-      if (!r || seen.has(r.hash)) continue
-      seen.add(r.hash)
-      collected.push(r)
-    }
-    shaped = shapeAll(collected, ctx, SOURCE_DEFAULT)
-    if (shaped.filter(r => r._tier === 'A').length >= 10) break
-  }
-
-  return finalize(shaped, ctx.resolution)
+  const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode })
+  const shaped = await collectFeed(
+    queries,
+    rssSearchWithRetry,
+    raw => itemToResult(raw, { exclusions: ctx.exclusions }),
+    ctx,
+    SOURCE_DEFAULT
+  )
+  return finalize(shaped, ctx)
 }
 
 export default new class Yameii {
