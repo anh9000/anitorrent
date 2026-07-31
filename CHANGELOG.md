@@ -15,6 +15,7 @@ Per-source bumps: `nyaa 1.0.26`, `animetosho 1.0.19`, `subsplease 1.0.17`, `yame
 ### Changed
 
 - **Searches are roughly twice as fast.** Each source used to run its queries one after another and only stop early after 20 exact matches, a threshold almost nothing reaches, so every search paid for every query in sequence. Queries now go out together, and the episode-numbered ones are a second round that only runs when the plain title search did not already find the episode, which for an airing show is never. AnimeTosho, whose API is slow and serializes concurrent requests, also had its query count halved. Measured over 8 shows a source search averages 1.6s, down from about 4s. A full picker for a show with no AnimeTosho coverage went from 12.5s to 7.7s, the remainder being AnimeTosho own API latency.
+
 ## [1.6.13] - 2026-07-25 (stable)
 
 Per-source bumps: `nyaa 1.0.25`, `animetosho 1.0.18`, `subsplease 1.0.16`, `yameii 1.0.22`, `toonshub 1.0.19`. Seadex unchanged. Consolidates all of today work; supersedes v1.6.10 through v1.6.12.
