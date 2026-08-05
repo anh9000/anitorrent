@@ -17,6 +17,7 @@ Per-source bumps: `nyaa 1.0.27`, `animetosho 1.0.20`, `subsplease 1.0.18`, `yame
 ### Changed
 
 - **Request volume is lower than before either release.** Both rounds used to run every time. The episode-numbered round now only runs when the plain titles did not already find the episode, which for an airing show is never, and it stops at the first query that finds it. All base titles are still searched, since stopping at the first match cost real results for shows whose releases split across two naming conventions.
+
 ## [1.6.14] - 2026-07-25 (stable)
 
 Per-source bumps: `nyaa 1.0.26`, `animetosho 1.0.19`, `subsplease 1.0.17`, `yameii 1.0.23`, `toonshub 1.0.20`. Seadex unchanged.
