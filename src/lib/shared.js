@@ -288,35 +288,63 @@ export function buildQueries (titles, opts = {}) {
   return { bases, numbered }
 }
 
-// Fetch in two phases. The base queries go out together, and the numbered ones
-// only run if those found no exact match, which is the case for an older
-// episode that has fallen off the feed's recent page. An airing show settles in
-// one round of parallel requests instead of four sequential ones.
-export async function collectFeed (queries, fetchItems, mapItem, ctx, sourceDefault) {
+// Fetch in two phases, stopping the moment the episode is found.
+//
+// The numbered queries are a second phase that only runs when the plain titles
+// did not turn up the episode, which for an airing show is never.
+//
+// Requests are sequential by default. Three sources read the same nyaa feed, so
+// firing each source's queries at once turns into a burst several times that
+// size, and nyaa answers with 429. It also gains nothing: nyaa serializes
+// requests per IP, so six at once measured 2.4s to 2.9s each against 0.5s each
+// in sequence. Sources on their own host pass parallel: true.
+export async function collectFeed (queries, fetchItems, mapItem, ctx, sourceDefault, opts = {}) {
   const seen = new Set()
   const collected = []
   let shaped = []
   let lastError = null
 
-  const phase = async qs => {
-    const settled = await Promise.allSettled(qs.map(q => fetchItems(q)))
-    for (const s of settled) {
-      if (s.status === 'rejected') { lastError = s.reason; continue }
-      for (const raw of s.value) {
-        const r = mapItem(raw)
-        if (!r || seen.has(r.hash)) continue
-        seen.add(r.hash)
-        collected.push(r)
-      }
+  const absorb = items => {
+    for (const raw of items) {
+      const r = mapItem(raw)
+      if (!r || seen.has(r.hash)) continue
+      seen.add(r.hash)
+      collected.push(r)
     }
     shaped = shapeAll(collected, ctx, sourceDefault)
   }
+  const foundEpisode = () => shaped.some(r => r._tier === 'A')
 
-  await phase(queries.bases)
-  if (!collected.length && lastError) throw lastError
-  if (queries.numbered.length && !shaped.some(r => r._tier === 'A')) {
-    await phase(queries.numbered)
+  const phase = async (qs, stopWhenFound) => {
+    if (opts.parallel) {
+      const settled = await Promise.allSettled(qs.map(q => fetchItems(q)))
+      const ok = []
+      for (const s of settled) {
+        if (s.status === 'rejected') lastError = s.reason
+        else ok.push(s.value)
+      }
+      for (const items of ok) absorb(items)
+      return
+    }
+    for (const q of qs) {
+      try {
+        absorb(await fetchItems(q))
+      } catch (err) {
+        lastError = err
+        continue
+      }
+      if (stopWhenFound && foundEpisode()) return
+    }
   }
+
+  // Every base title is searched. Stopping at the first one that matched costs
+  // real results: a show whose releases are split across two naming conventions
+  // only shows the half that happened to be queried first. The numbered round
+  // is different, it exists purely to reach an episode that fell off the feed,
+  // so the first query that finds it ends the round.
+  await phase(queries.bases, false)
+  if (!collected.length && lastError) throw lastError
+  if (queries.numbered.length && !foundEpisode()) await phase(queries.numbered, true)
   return shaped
 }
 

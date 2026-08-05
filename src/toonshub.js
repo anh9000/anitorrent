@@ -10,6 +10,8 @@ const NYAA_BASE = 'https://nyaa.si'
 const TITLE_PREFIX = '[ToonsHub]'
 const ANIME_CATEGORY = '1_2'
 
+const RETRY_DELAYS = [1200, 3000, 6000]
+
 async function rssSearch (query) {
   const q = TITLE_PREFIX + (query ? ' ' + query : '')
   const url = NYAA_BASE + '/?page=rss' +
@@ -25,6 +27,8 @@ async function rssSearch (query) {
   if (res.status === 429) {
     const err = new Error('429')
     err.rateLimited = true
+    const ra = parseInt(res.headers && res.headers.get ? res.headers.get('retry-after') : '', 10)
+    if (Number.isInteger(ra) && ra > 0 && ra <= 60) err.retryAfter = ra * 1000
     throw err
   }
   if (!res.ok) {
@@ -38,21 +42,17 @@ async function rssSearch (query) {
 }
 
 async function rssSearchWithRetry (query) {
-  try {
-    return await rssSearch(query)
-  } catch (err) {
-    if (err.rateLimited) {
-      await new Promise(r => setTimeout(r, 1500))
-      try {
-        return await rssSearch(query)
-      } catch (retryErr) {
-        if (retryErr.rateLimited) {
-          throw new Error('Nyaa is rate limiting requests for the ToonsHub feed. Wait a moment and try again.')
-        }
-        throw retryErr
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await rssSearch(query)
+    } catch (err) {
+      if (!err.rateLimited || attempt >= RETRY_DELAYS.length) {
+        if (err.rateLimited) throw new Error('Nyaa is rate limiting requests for the ToonsHub feed. Wait a moment and try again.')
+        throw err
       }
+      const base = err.retryAfter != null ? err.retryAfter : RETRY_DELAYS[attempt]
+      await new Promise(r => setTimeout(r, base + Math.floor(Math.random() * 400)))
     }
-    throw err
   }
 }
 

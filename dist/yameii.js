@@ -232,32 +232,45 @@ function buildQueries(titles, opts = {}) {
   const numbered = opts.episode == null ? [] : bases.map((b) => b + " " + pad(opts.episode));
   return { bases, numbered };
 }
-async function collectFeed(queries, fetchItems, mapItem, ctx, sourceDefault) {
+async function collectFeed(queries, fetchItems, mapItem, ctx, sourceDefault, opts = {}) {
   const seen = /* @__PURE__ */ new Set();
   const collected = [];
   let shaped = [];
   let lastError = null;
-  const phase = async (qs) => {
-    const settled = await Promise.allSettled(qs.map((q) => fetchItems(q)));
-    for (const s of settled) {
-      if (s.status === "rejected") {
-        lastError = s.reason;
-        continue;
-      }
-      for (const raw of s.value) {
-        const r = mapItem(raw);
-        if (!r || seen.has(r.hash)) continue;
-        seen.add(r.hash);
-        collected.push(r);
-      }
+  const absorb = (items) => {
+    for (const raw of items) {
+      const r = mapItem(raw);
+      if (!r || seen.has(r.hash)) continue;
+      seen.add(r.hash);
+      collected.push(r);
     }
     shaped = shapeAll(collected, ctx, sourceDefault);
   };
-  await phase(queries.bases);
+  const foundEpisode = () => shaped.some((r) => r._tier === "A");
+  const phase = async (qs, stopWhenFound) => {
+    if (opts.parallel) {
+      const settled = await Promise.allSettled(qs.map((q) => fetchItems(q)));
+      const ok = [];
+      for (const s of settled) {
+        if (s.status === "rejected") lastError = s.reason;
+        else ok.push(s.value);
+      }
+      for (const items of ok) absorb(items);
+      return;
+    }
+    for (const q of qs) {
+      try {
+        absorb(await fetchItems(q));
+      } catch (err) {
+        lastError = err;
+        continue;
+      }
+      if (stopWhenFound && foundEpisode()) return;
+    }
+  };
+  await phase(queries.bases, false);
   if (!collected.length && lastError) throw lastError;
-  if (queries.numbered.length && !shaped.some((r) => r._tier === "A")) {
-    await phase(queries.numbered);
-  }
+  if (queries.numbered.length && !foundEpisode()) await phase(queries.numbered, true);
   return shaped;
 }
 var ANILIST_API = "https://graphql.anilist.co";
@@ -590,6 +603,7 @@ var SOURCE_DEFAULT = "high";
 var NYAA_BASE = "https://nyaa.si";
 var UPLOADER = "Yameii";
 var ANIME_CATEGORY = "1_2";
+var RETRY_DELAYS = [1200, 3e3, 6e3];
 async function rssSearch(query) {
   const qs = "?u=" + encodeURIComponent(UPLOADER) + "&page=rss" + (query ? "&q=" + encodeURIComponent(query) : "") + "&c=" + ANIME_CATEGORY + "&s=id&o=desc";
   const url = NYAA_BASE + "/" + qs;
@@ -602,6 +616,8 @@ async function rssSearch(query) {
   if (res.status === 429) {
     const err = new Error("429");
     err.rateLimited = true;
+    const ra = parseInt(res.headers && res.headers.get ? res.headers.get("retry-after") : "", 10);
+    if (Number.isInteger(ra) && ra > 0 && ra <= 60) err.retryAfter = ra * 1e3;
     throw err;
   }
   if (!res.ok) {
@@ -614,21 +630,17 @@ async function rssSearch(query) {
   return pickItems(text);
 }
 async function rssSearchWithRetry(query) {
-  try {
-    return await rssSearch(query);
-  } catch (err) {
-    if (err.rateLimited) {
-      await new Promise((r) => setTimeout(r, 1500));
-      try {
-        return await rssSearch(query);
-      } catch (retryErr) {
-        if (retryErr.rateLimited) {
-          throw new Error("Nyaa is rate limiting requests for the Yameii feed. Wait a moment and try again.");
-        }
-        throw retryErr;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await rssSearch(query);
+    } catch (err) {
+      if (!err.rateLimited || attempt >= RETRY_DELAYS.length) {
+        if (err.rateLimited) throw new Error("Nyaa is rate limiting requests for the Yameii feed. Wait a moment and try again.");
+        throw err;
       }
+      const base = err.retryAfter != null ? err.retryAfter : RETRY_DELAYS[attempt];
+      await new Promise((r) => setTimeout(r, base + Math.floor(Math.random() * 400)));
     }
-    throw err;
   }
 }
 function itemToResult(raw, opts) {

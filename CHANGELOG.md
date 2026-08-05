@@ -4,6 +4,19 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.15] - 2026-07-25 (stable)
+
+Per-source bumps: `nyaa 1.0.27`, `animetosho 1.0.20`, `subsplease 1.0.18`, `yameii 1.0.24`, `toonshub 1.0.21`. Seadex unchanged.
+
+### Fixed
+
+- **Nyaa rate limiting introduced by the previous release.** v1.6.14 made each source fire its queries at once. Three sources read the same nyaa feed, so a search became a burst several times that size and nyaa answered 429. The parallelism was not even buying anything: nyaa serializes requests per IP, and six at once measured 2.4s to 2.9s each against 0.5s each in sequence. Those three sources are sequential again. Sources on their own host (SubsPlease, AnimeTosho) still send theirs together.
+
+- **Retry backoff on 429.** A single retry after a flat 1.2s was often not enough. Three attempts now, backing off 1.2s, 3s then 6s with jitter so the three nyaa sources do not retry in lockstep. Nyaa sends no Retry-After header, but it is honoured when present.
+
+### Changed
+
+- **Request volume is lower than before either release.** Both rounds used to run every time. The episode-numbered round now only runs when the plain titles did not already find the episode, which for an airing show is never, and it stops at the first query that finds it. All base titles are still searched, since stopping at the first match cost real results for shows whose releases split across two naming conventions.
 ## [1.6.14] - 2026-07-25 (stable)
 
 Per-source bumps: `nyaa 1.0.26`, `animetosho 1.0.19`, `subsplease 1.0.17`, `yameii 1.0.23`, `toonshub 1.0.20`. Seadex unchanged.
