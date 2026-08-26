@@ -102,8 +102,8 @@ async function fetchByAid (aid) {
 // AnimeTosho's search endpoint is slow and serializes concurrent requests, so
 // the query count is kept low and the episode-numbered round only runs when the
 // plain titles did not already turn up the episode.
-async function fetchByText (titles, episode, foundEpisode) {
-  const { bases, numbered } = buildQueries(titles, { limit: 2, episode })
+async function fetchByText (titles, episode, foundEpisode, anilistId) {
+  const { bases, numbered } = buildQueries(titles, { limit: 2, episode, anilistId })
   const seen = new Map()
   const run = async qs => {
     const settled = await Promise.allSettled(qs.map(q => tryFetch(BASE + '?q=' + encodeURIComponent(q))))
@@ -148,7 +148,7 @@ async function search (query, mode) {
   if (!results.some(r => r._tier === 'A') && (query.titles || []).length) {
     const seen = new Set(results.map(r => r.hash))
     const foundEpisode = items => classifyAndTag(items, ctx).some(r => r._tier === 'A')
-    for (const r of classifyAndTag(await fetchByText(query.titles, query.episode, foundEpisode), ctx)) {
+    for (const r of classifyAndTag(await fetchByText(query.titles, query.episode, foundEpisode, query.anilistId), ctx)) {
       if (seen.has(r.hash)) continue
       seen.add(r.hash)
       results.push(r)

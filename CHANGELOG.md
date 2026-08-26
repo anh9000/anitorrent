@@ -4,6 +4,32 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.17] - 2026-08-26 (stable)
+
+Per-source bumps: `nyaa 1.0.29`, `animetosho 1.0.22`, `subsplease 1.0.20`, `yameii 1.0.26`, `toonshub 1.0.23`. Seadex unchanged.
+
+### Fixed
+
+- **Correct episodes were being rejected when release groups disagree about the season number.** BLEACH: The Calamity episode 1 is episode 41 of the arc, and groups label that same file S17E41, S01E41 and S04E41 depending on where they start counting. The season filter picked one reading and threw away the rest, leaving 2 usable results out of 7 real ones. When an episode number has been resolved through the prequel chain it is already absolute, so it identifies the episode on its own and the season marker adds nothing. The season check is now skipped in exactly that case. It still applies everywhere else, so a season 2 release cannot leak into a season 1 search: Mushoku Tensei season 1 episode 8 still rejects both `S2 - 08` and `S03E08`.
+
+- **Season packs covering the requested episode were not recognised as packs.** A file named `Bleach - Sennen Kessen Hen (41-44)` was treated as unrelated rather than as a batch containing episode 41, so it was dropped instead of offered below the singles. Ranges are now read from the filename and a pack covering the episode is tagged as a batch.
+
+### Added
+
+- **Trusted and remake flags from nyaa are now used.** Every nyaa item carries `nyaa:trusted` (a vetted uploader) and `nyaa:remake` (a re-encode of someone else's release), and both were being discarded. Trusted releases now rank above ordinary ones and remakes rank below, so when several groups post the same episode the vetted copy is the one that survives into the list.
+
+- **A title alias table for shows with unusual naming**, in `src/lib/aliases.js`, keyed by AniList ID. It is compiled into the bundles rather than fetched, so it costs nothing at runtime and still reaches users on the next Hayase launch. Aliases run only as a rescue round when the normal titles find nothing, so they never displace a query that already works.
+
+### Changed
+
+- **Ranking picks the best releases rather than merely the newest.** Once real episode matches exist the list is ordered by resolution match, then uploader quality, then seeders, with upload date only breaking ties. Newest-first still applies when nothing matched exactly, which is what keeps a currently airing episode on top. The old date-first order meant a release with 2000 seeders could be cut from the list by one posted an hour later with 5.
+
+- Result objects are filtered before they leave a source, so internal bookkeeping fields cannot reach Hayase. An unparseable upload date is treated as unknown instead of producing NaN comparisons, and the sort no longer mutates the caller's array.
+
+### Verified
+
+- Cross-source matrix over 8 shows against all five sources: 305 results, 0 wrong season, 0 off-show, 0 internal field leaks. Result counts rose across the board (Bleach on nyaa 2 to 7, Frieren 8 to 12, SPY x FAMILY 15 to 17). Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures. The AnimeTosho limitation on BLEACH: The Calamity documented in v1.6.16 is unchanged.
+
 ## [1.6.16] - 2026-08-26 (stable)
 
 Per-source bumps: `nyaa 1.0.28`, `animetosho 1.0.21`, `subsplease 1.0.19`, `yameii 1.0.25`, `toonshub 1.0.22`. Seadex unchanged.

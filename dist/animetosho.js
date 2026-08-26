@@ -1,3 +1,17 @@
+// src/lib/aliases.js
+var TITLE_ALIASES = {
+  185874: ["bleach sennen kessen", "bleach thousand year blood war"],
+  108632: ["re zero kara hajimeru", "rezero starting life"],
+  21: ["one piece"],
+  235: ["detective conan", "meitantei conan"]
+};
+function aliasTitles(anilistId) {
+  const n = Number(anilistId);
+  if (!Number.isInteger(n)) return [];
+  const list = TITLE_ALIASES[n];
+  return Array.isArray(list) ? list.slice() : [];
+}
+
 // src/lib/shared.js
 var BATCH_PATTERNS = [
   /\bbatch\b/i,
@@ -180,13 +194,26 @@ function buildQueries(titles, opts = {}) {
   const bases = [];
   const seen = /* @__PURE__ */ new Set();
   for (const title of rankTitlesForQuery(titles || [])) {
+    if (bases.length >= limit) break;
     const q = trimTitleForQuery(title);
     if (!q || seen.has(q)) continue;
     seen.add(q);
     bases.push(q);
     if (bases.length >= limit) break;
   }
-  const numbered = opts.episode == null ? [] : bases.map((b) => b + " " + pad(opts.episode));
+  const rescue = [];
+  for (const alias of aliasTitles(opts.anilistId)) {
+    const a = String(alias).trim();
+    if (!a || seen.has(a)) continue;
+    seen.add(a);
+    rescue.push(a);
+  }
+  const withEp = (q) => opts.episode == null ? [] : [q + " " + pad(opts.episode)];
+  const numbered = [
+    ...bases.flatMap(withEp),
+    ...rescue,
+    ...rescue.flatMap(withEp)
+  ];
   return { bases, numbered };
 }
 var ANILIST_API = "https://graphql.anilist.co";
@@ -281,6 +308,7 @@ function shapeAll(items, ctx, sourceDefault) {
   }
   if (!best) return exact;
   ctx.chosenEpisodes = /* @__PURE__ */ new Set([best.episode]);
+  ctx.offsetResolved = best.episode !== ctx.episode;
   return best.shaped;
 }
 function newestOf(results) {
@@ -292,18 +320,34 @@ function newestOf(results) {
   }
   return newest;
 }
+function timeOf(r) {
+  const t = r.date && typeof r.date.getTime === "function" ? r.date.getTime() : 0;
+  return Number.isFinite(t) ? t : 0;
+}
+function qualityRank(r) {
+  if (r._remake) return 2;
+  if (r._trusted) return 0;
+  return 1;
+}
 function sortResults(results, resolution) {
   const hasExact = results.some((r) => r._tier === "A");
-  return results.sort((a, b) => {
+  const sorted = results.slice();
+  return sorted.sort((a, b) => {
     if (hasExact && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1;
-    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0);
-    if (dt !== 0) return dt;
     if (resolution) {
       const am = matchesResolution(a.title, resolution) ? 1 : 0;
       const bm = matchesResolution(b.title, resolution) ? 1 : 0;
       if (am !== bm) return bm - am;
     }
-    return (b.seeders || 0) - (a.seeders || 0);
+    if (!hasExact) {
+      const dt = timeOf(b) - timeOf(a);
+      if (dt !== 0) return dt;
+    }
+    const qr = qualityRank(a) - qualityRank(b);
+    if (qr !== 0) return qr;
+    const sd = (b.seeders || 0) - (a.seeders || 0);
+    if (sd !== 0) return sd;
+    return timeOf(b) - timeOf(a);
   });
 }
 function titleEpisodeMarkers(title) {
@@ -345,10 +389,18 @@ function finalize(results, ctx, limit = 30) {
     kept = results.filter((r) => r._tier !== "C");
   } else {
     const wanted = typeof ctx === "string" ? null : wantedEpisodes(ctx);
-    const showSeason = typeof ctx === "string" ? null : ctx.showSeason;
+    const showSeason = typeof ctx === "string" || ctx && ctx.offsetResolved ? null : ctx.showSeason;
     kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).filter((r) => resultMatchesSeason(r.title, showSeason)).map((r) => ({ ...r, accuracy: "low" }));
   }
-  return sortResults(kept, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest);
+  return sortResults(kept, resolution).slice(0, limit).map(stripInternal);
+}
+function stripInternal(r) {
+  const out = {};
+  for (const k of Object.keys(r)) {
+    if (k.charCodeAt(0) === 95) continue;
+    out[k] = r[k];
+  }
+  return out;
 }
 function wantedEpisodes(ctx) {
   if (!ctx || ctx.mode !== "single" || ctx.episode == null) return null;
@@ -431,11 +483,29 @@ function pad(n) {
   const s = String(n);
   return s.length < 2 ? "0" + s : s;
 }
+function usesOffsetEpisode(opts) {
+  const c = opts && opts.episodeCandidates;
+  return !!(c && c.size === 1 && opts.episode != null && !c.has(opts.episode));
+}
+function batchCoversEpisode(title, opts) {
+  const wanted = [];
+  const c = opts.episodeCandidates;
+  if (c && c.size) for (const n of c) wanted.push(n);
+  else if (opts.episode != null) wanted.push(opts.episode);
+  if (!wanted.length) return false;
+  const markers = titleEpisodeMarkers(title);
+  for (const [lo, hi] of markers) {
+    if (hi <= lo) continue;
+    for (const w of wanted) if (w >= lo && w <= hi) return true;
+  }
+  return false;
+}
 function classifyResult(title, opts) {
   const showTokens = opts.showTokens;
   const minHits = opts.minHits != null ? opts.minHits : showTokens && showTokens.size >= 3 ? 2 : 1;
   if (!resultMatchesShow(title, showTokens, minHits)) return null;
-  const seasonOk = resultMatchesSeason(title, opts.showSeason);
+  const offset = usesOffsetEpisode(opts);
+  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason);
   const yearOk = resultMatchesYear(title, opts.showYears);
   const isBatch = looksLikeBatch(title);
   if (opts.mode === "batch") {
@@ -448,6 +518,7 @@ function classifyResult(title, opts) {
   if (seasonOk && yearOk && epOk) {
     return isBatch ? "B" : "A";
   }
+  if (seasonOk && yearOk && isBatch && batchCoversEpisode(title, opts)) return "B";
   return "C";
 }
 function matchesAnyEpisode(title, opts) {
@@ -554,8 +625,8 @@ async function fetchByAid(aid) {
   const items = await tryFetch(BASE + "?aid=" + encodeURIComponent(aid));
   return items.map((i) => toResult(i, "high")).filter(Boolean);
 }
-async function fetchByText(titles, episode, foundEpisode) {
-  const { bases, numbered } = buildQueries(titles, { limit: 2, episode });
+async function fetchByText(titles, episode, foundEpisode, anilistId) {
+  const { bases, numbered } = buildQueries(titles, { limit: 2, episode, anilistId });
   const seen = /* @__PURE__ */ new Map();
   const run = async (qs) => {
     const settled = await Promise.allSettled(qs.map((q) => tryFetch(BASE + "?q=" + encodeURIComponent(q))));
@@ -601,7 +672,7 @@ async function search(query, mode) {
   if (!results.some((r) => r._tier === "A") && (query.titles || []).length) {
     const seen = new Set(results.map((r) => r.hash));
     const foundEpisode = (items) => classifyAndTag(items, ctx).some((r) => r._tier === "A");
-    for (const r of classifyAndTag(await fetchByText(query.titles, query.episode, foundEpisode), ctx)) {
+    for (const r of classifyAndTag(await fetchByText(query.titles, query.episode, foundEpisode, query.anilistId), ctx)) {
       if (seen.has(r.hash)) continue;
       seen.add(r.hash);
       results.push(r);

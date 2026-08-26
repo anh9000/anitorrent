@@ -69,7 +69,10 @@ function itemToResult (raw, opts) {
   const downloads = parseInt(pickTag(raw, 'nyaa:downloads'), 10) || 0
   const size = parseSize(pickTag(raw, 'nyaa:size'))
   const pubDate = pickTag(raw, 'pubDate')
-  const date = pubDate ? new Date(pubDate) : new Date()
+  const parsed = pubDate ? new Date(pubDate) : new Date()
+  const date = Number.isFinite(parsed.getTime()) ? parsed : new Date(0)
+  const trusted = /^yes$/i.test(pickTag(raw, 'nyaa:trusted'))
+  const remake = /^yes$/i.test(pickTag(raw, 'nyaa:remake'))
 
   return {
     title,
@@ -80,6 +83,8 @@ function itemToResult (raw, opts) {
     downloads,
     size,
     date,
+    _trusted: trusted,
+    _remake: remake,
     accuracy: 'high'
   }
 }
@@ -89,7 +94,7 @@ async function runSearch (query, opts) {
 
   const mode = opts.batch ? 'batch' : (opts.movie ? 'movie' : 'single')
   const ctx = searchContext(query, mode)
-  const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode })
+  const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode, anilistId: query.anilistId })
   const shaped = await collectFeed(
     queries,
     rssSearchWithRetry,

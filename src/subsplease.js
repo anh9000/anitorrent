@@ -118,7 +118,7 @@ async function runSearch (query, mode) {
   const entries = []
 
   const settled = await Promise.allSettled(
-    buildQueries(query.titles, { limit: 3 }).bases.map(q => searchApi(q))
+    buildQueries(query.titles, { limit: 3, anilistId: query.anilistId }).bases.map(q => searchApi(q))
   )
   let lastError = null
   for (const s of settled) {

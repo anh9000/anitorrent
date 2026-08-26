@@ -1,3 +1,5 @@
+import { aliasTitles } from './aliases.js'
+
 // Shared matching, query, and torrent helpers used by every source.
 // Single source of truth: fix matching logic here once, all sources inherit it.
 
@@ -273,6 +275,7 @@ export function buildQueries (titles, opts = {}) {
   const bases = []
   const seen = new Set()
   for (const title of rankTitlesForQuery(titles || [])) {
+    if (bases.length >= limit) break
     const q = trimTitleForQuery(title)
     if (!q || seen.has(q)) continue
     seen.add(q)
@@ -284,7 +287,19 @@ export function buildQueries (titles, opts = {}) {
   // 1100" finds nothing while "detective conan 1100" finds the episode. These
   // are a second phase, not extra work up front, since a feed's recent page
   // already holds the current episode of an airing show.
-  const numbered = opts.episode == null ? [] : bases.map(b => b + ' ' + pad(opts.episode))
+  const rescue = []
+  for (const alias of aliasTitles(opts.anilistId)) {
+    const a = String(alias).trim()
+    if (!a || seen.has(a)) continue
+    seen.add(a)
+    rescue.push(a)
+  }
+  const withEp = q => opts.episode == null ? [] : [q + ' ' + pad(opts.episode)]
+  const numbered = [
+    ...bases.flatMap(withEp),
+    ...rescue,
+    ...rescue.flatMap(withEp)
+  ]
   return { bases, numbered }
 }
 
@@ -478,6 +493,7 @@ export function shapeAll (items, ctx, sourceDefault) {
   }
   if (!best) return exact
   ctx.chosenEpisodes = new Set([best.episode])
+  ctx.offsetResolved = best.episode !== ctx.episode
   return best.shaped
 }
 
@@ -494,18 +510,36 @@ function newestOf (results) {
 // Newest first. Exact-episode matches lead only when some exist, so per-cour
 // entries (where no filename maps to the AniList episode number) still put the
 // freshest upload on top instead of a years-old batch.
+function timeOf (r) {
+  const t = r.date && typeof r.date.getTime === 'function' ? r.date.getTime() : 0
+  return Number.isFinite(t) ? t : 0
+}
+
+function qualityRank (r) {
+  if (r._remake) return 2
+  if (r._trusted) return 0
+  return 1
+}
+
 export function sortResults (results, resolution) {
   const hasExact = results.some(r => r._tier === 'A')
-  return results.sort((a, b) => {
+  const sorted = results.slice()
+  return sorted.sort((a, b) => {
     if (hasExact && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1
-    const dt = (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0)
-    if (dt !== 0) return dt
     if (resolution) {
       const am = matchesResolution(a.title, resolution) ? 1 : 0
       const bm = matchesResolution(b.title, resolution) ? 1 : 0
       if (am !== bm) return bm - am
     }
-    return (b.seeders || 0) - (a.seeders || 0)
+    if (!hasExact) {
+      const dt = timeOf(b) - timeOf(a)
+      if (dt !== 0) return dt
+    }
+    const qr = qualityRank(a) - qualityRank(b)
+    if (qr !== 0) return qr
+    const sd = (b.seeders || 0) - (a.seeders || 0)
+    if (sd !== 0) return sd
+    return timeOf(b) - timeOf(a)
   })
 }
 
@@ -566,7 +600,7 @@ export function finalize (results, ctx, limit = 30) {
     kept = results.filter(r => r._tier !== 'C')
   } else {
     const wanted = typeof ctx === 'string' ? null : wantedEpisodes(ctx)
-    const showSeason = typeof ctx === 'string' ? null : ctx.showSeason
+    const showSeason = typeof ctx === 'string' || (ctx && ctx.offsetResolved) ? null : ctx.showSeason
     kept = results
       .filter(r => !hasConflictingEpisode(r.title, wanted))
       // A season the filename states outright and does not share with the show
@@ -576,7 +610,16 @@ export function finalize (results, ctx, limit = 30) {
       .filter(r => resultMatchesSeason(r.title, showSeason))
       .map(r => ({ ...r, accuracy: 'low' }))
   }
-  return sortResults(kept, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest)
+  return sortResults(kept, resolution).slice(0, limit).map(stripInternal)
+}
+
+export function stripInternal (r) {
+  const out = {}
+  for (const k of Object.keys(r)) {
+    if (k.charCodeAt(0) === 95) continue
+    out[k] = r[k]
+  }
+  return out
 }
 
 function wantedEpisodes (ctx) {
@@ -685,11 +728,31 @@ export function pad (n) {
 //   A = passes season+year AND (single-episode match | movie mode | batch mode)
 //   B = passes season+year but is a batch containing the requested ep in single mode
 //   C = token-only match (season/year/episode mismatch) - fallback
+export function usesOffsetEpisode (opts) {
+  const c = opts && opts.episodeCandidates
+  return !!(c && c.size === 1 && opts.episode != null && !c.has(opts.episode))
+}
+
+function batchCoversEpisode (title, opts) {
+  const wanted = []
+  const c = opts.episodeCandidates
+  if (c && c.size) for (const n of c) wanted.push(n)
+  else if (opts.episode != null) wanted.push(opts.episode)
+  if (!wanted.length) return false
+  const markers = titleEpisodeMarkers(title)
+  for (const [lo, hi] of markers) {
+    if (hi <= lo) continue
+    for (const w of wanted) if (w >= lo && w <= hi) return true
+  }
+  return false
+}
+
 export function classifyResult (title, opts) {
   const showTokens = opts.showTokens
   const minHits = opts.minHits != null ? opts.minHits : (showTokens && showTokens.size >= 3 ? 2 : 1)
   if (!resultMatchesShow(title, showTokens, minHits)) return null
-  const seasonOk = resultMatchesSeason(title, opts.showSeason)
+  const offset = usesOffsetEpisode(opts)
+  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason)
   const yearOk = resultMatchesYear(title, opts.showYears)
   const isBatch = looksLikeBatch(title)
   if (opts.mode === 'batch') {
@@ -702,6 +765,7 @@ export function classifyResult (title, opts) {
   if (seasonOk && yearOk && epOk) {
     return isBatch ? 'B' : 'A'
   }
+  if (seasonOk && yearOk && isBatch && batchCoversEpisode(title, opts)) return 'B'
   return 'C'
 }
 
