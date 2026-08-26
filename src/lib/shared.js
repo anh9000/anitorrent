@@ -566,8 +566,14 @@ export function finalize (results, ctx, limit = 30) {
     kept = results.filter(r => r._tier !== 'C')
   } else {
     const wanted = typeof ctx === 'string' ? null : wantedEpisodes(ctx)
+    const showSeason = typeof ctx === 'string' ? null : ctx.showSeason
     kept = results
       .filter(r => !hasConflictingEpisode(r.title, wanted))
+      // A season the filename states outright and does not share with the show
+      // is the same kind of mismatch: asking for season 4 was turning up a dub
+      // sitting on S03E12 and season 1 to 3 Bluray packs. Titles that name no
+      // season still pass.
+      .filter(r => resultMatchesSeason(r.title, showSeason))
       .map(r => ({ ...r, accuracy: 'low' }))
   }
   return sortResults(kept, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest)
@@ -606,7 +612,21 @@ export const GENERIC_QUERY_WORDS = new Set([
 export function trimTitleForQuery (title) {
   const colon = title.indexOf(':')
   const base = colon > 0 ? title.slice(0, colon) : title
-  return significantTokens(base).slice(0, 4).join(' ') || escapeQuery(title)
+  const fromBase = significantTokens(base).slice(0, 4).join(' ')
+  if (fromBase) return fromBase
+  // The part before the colon can be too short to search on its own, as in
+  // "Re:Zero" or "K:Return of Kings". Falling back to the raw title sent the
+  // whole thing as one query, and nyaa requires every word to match, so only
+  // groups using that exact phrasing came back. ToonsHub names the same show
+  // "ReZERO -Starting Life in Another World-" and matched nothing at all.
+  //
+  // The fallback keeps the title's own leading words rather than its
+  // significant tokens. Dropping stopwords here searched a synonym like
+  // "DAN DA DAN: FIRST ENCOUNTER" as "first encounter", which is generic
+  // enough to return unrelated shows. Keeping the words yields a query that
+  // simply finds nothing when it is wrong, which is the safer failure.
+  const words = escapeQuery(title).split(/\s+/).filter(Boolean).slice(0, 4).join(' ')
+  return words || escapeQuery(title)
 }
 
 export function rankTitlesForQuery (titles) {

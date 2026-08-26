@@ -429,7 +429,8 @@ function finalize(results, ctx, limit = 30) {
     kept = results.filter((r) => r._tier !== "C");
   } else {
     const wanted = typeof ctx === "string" ? null : wantedEpisodes(ctx);
-    kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).map((r) => ({ ...r, accuracy: "low" }));
+    const showSeason = typeof ctx === "string" ? null : ctx.showSeason;
+    kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).filter((r) => resultMatchesSeason(r.title, showSeason)).map((r) => ({ ...r, accuracy: "low" }));
   }
   return sortResults(kept, resolution).slice(0, limit).map(({ _tier, ...rest }) => rest);
 }
@@ -483,7 +484,10 @@ var GENERIC_QUERY_WORDS = /* @__PURE__ */ new Set([
 function trimTitleForQuery(title) {
   const colon = title.indexOf(":");
   const base = colon > 0 ? title.slice(0, colon) : title;
-  return significantTokens(base).slice(0, 4).join(" ") || escapeQuery(title);
+  const fromBase = significantTokens(base).slice(0, 4).join(" ");
+  if (fromBase) return fromBase;
+  const words = escapeQuery(title).split(/\s+/).filter(Boolean).slice(0, 4).join(" ");
+  return words || escapeQuery(title);
 }
 function rankTitlesForQuery(titles) {
   const list = (titles || []).map((t, i) => {

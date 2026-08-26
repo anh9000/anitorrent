@@ -4,7 +4,27 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
-## [1.6.15] - 2026-07-25 (stable)
+## [1.6.16] - 2026-08-26 (stable)
+
+Per-source bumps: `nyaa 1.0.28`, `animetosho 1.0.21`, `subsplease 1.0.19`, `yameii 1.0.25`, `toonshub 1.0.22`. Seadex unchanged.
+
+### Fixed
+
+- **Shows whose title starts with a short prefix before a colon searched the wrong thing.** The query builder cuts a title at its first colon, so "Re:Zero kara Hajimeru Isekai Seikatsu 4th Season" became "Re", which has no usable tokens, and it fell back to sending the entire title as one query. Nyaa requires every word to match, so only groups that name files with that exact phrasing came back. ToonsHub calls the same show "ReZERO -Starting Life in Another World-" and matched nothing at all, which is why the source was missing from the picker entirely while nyaa showed results. The fallback now keeps the title's first four words. Measured on the live feed: the old query returned 0 items, the new one returns 75. This affected 31 titles across the 297-show test set, every one of them a short-prefix-colon name.
+
+- **Wrong seasons no longer appear when a source lacks the episode.** The same rule that drops a differently-numbered episode now covers seasons. Asking for Re:Zero season 4 was turning up a dub sitting on S03E12 and season 1 to 3 Bluray packs, all from sources that had nothing for season 4. Titles that name no season still pass, so packs and movies are unaffected.
+
+- **A synonym could turn into a query generic enough to match unrelated shows.** Building the colon fallback from significant tokens dropped stopwords, so "DAN DA DAN: FIRST ENCOUNTER" searched as "first encounter" and returned a 1983 film. The fallback keeps the title's own words, which simply finds nothing when it is wrong instead of finding the wrong thing.
+
+### Verified
+
+- Cross-source matrix over 12 shows chosen for awkward titles (Re:Zero 4th Season, BLEACH TYBW: The Calamity, Dandadan, Frieren, One Piece, Detective Conan, Steins;Gate, Kaiju No. 8, SPY x FAMILY, Chainsaw Man, Vinland Saga, Vampire Hunter D: Bloodlust) against all five sources: 394 results, 0 wrong season, 0 off-show, and 0 wrong episode outside the one case below. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures.
+
+### Known limitation
+
+- AnimeTosho returns the previous cour's episode 1 for BLEACH TYBW: The Calamity. Its AniDB feed holds no file for the current cour, so the absolute number (41) matches nothing and the literal number falls through to a 2022 release. The AniDB mapping is correct; the files are simply not indexed there yet. Nyaa and ToonsHub both return the right episode for this show, so the picker is still correct at the top.
+
+## [1.6.15] - 2026-08-04 (stable)
 
 Per-source bumps: `nyaa 1.0.27`, `animetosho 1.0.20`, `subsplease 1.0.18`, `yameii 1.0.24`, `toonshub 1.0.21`. Seadex unchanged.
 
@@ -18,7 +38,7 @@ Per-source bumps: `nyaa 1.0.27`, `animetosho 1.0.20`, `subsplease 1.0.18`, `yame
 
 - **Request volume is lower than before either release.** Both rounds used to run every time. The episode-numbered round now only runs when the plain titles did not already find the episode, which for an airing show is never, and it stops at the first query that finds it. All base titles are still searched, since stopping at the first match cost real results for shows whose releases split across two naming conventions.
 
-## [1.6.14] - 2026-07-25 (stable)
+## [1.6.14] - 2026-07-31 (stable)
 
 Per-source bumps: `nyaa 1.0.26`, `animetosho 1.0.19`, `subsplease 1.0.17`, `yameii 1.0.23`, `toonshub 1.0.20`. Seadex unchanged.
 
