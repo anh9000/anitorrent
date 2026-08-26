@@ -113,20 +113,21 @@ function resultMatchesShow(title, tokens, minHits = 1) {
   }
   return false;
 }
-var ROMAN_SEASON = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
+var ROMAN_SEASON = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9 };
 function detectResultSeason(title) {
   const t = String(title || "");
   let m = t.match(/\bS(\d{1,2})(?:E\d|\b)/i);
   if (m) return parseInt(m[1], 10);
   m = t.match(/\b(?:Season\s+(\d+)|(\d+)(?:st|nd|rd|th)\s+Season)\b/i);
   if (m) return parseInt(m[1] || m[2], 10);
-  m = t.match(/\b[A-Za-z]+\s+(II|III|IV|V|VI|VII|VIII|IX|X)(?=\s|:|\.|-|$|\[|\()/);
+  m = t.match(/\b[A-Za-z0-9]+\s+(II|III|IV|V|VI|VII|VIII|IX)(?=\s|:|\.|-|$|\[|\()/);
   if (m) return ROMAN_SEASON[m[1]];
   const digitRE = /\b([2-9])(?=\s*$|\s*[:\-|(\[])/g;
   let dm;
   while ((dm = digitRE.exec(t)) !== null) {
     const before = t.slice(Math.max(0, dm.index - 8), dm.index).toLowerCase();
     if (/\bpart\s+$/.test(before)) continue;
+    if (/^-[A-Za-z]/.test(t.slice(dm.index + 1))) continue;
     return parseInt(dm[1], 10);
   }
   return null;
@@ -139,9 +140,35 @@ function detectShowSeason(titles) {
   }
   return max || 1;
 }
-function resultMatchesSeason(title, showSeason) {
+function seasonMarkerTokens(titles) {
+  const list = titles || [];
+  const franchise = /* @__PURE__ */ new Set();
+  for (const t of list) {
+    const raw = String(t);
+    const colon = raw.indexOf(":");
+    for (const tok of significantTokens(colon > 0 ? raw.slice(0, colon) : raw)) franchise.add(tok);
+  }
+  const marks = /* @__PURE__ */ new Set();
+  for (const t of list) {
+    const raw = String(t);
+    if (detectResultSeason(raw) != null) continue;
+    const colon = raw.indexOf(":");
+    if (colon <= 0) continue;
+    if (!significantTokens(raw.slice(0, colon)).length) continue;
+    for (const tok of significantTokens(raw.slice(colon + 1))) {
+      if (!franchise.has(tok)) marks.add(tok);
+    }
+  }
+  return marks;
+}
+function resultMatchesSeason(title, showSeason, markerTokens) {
   const rs = detectResultSeason(title);
-  if (showSeason > 1) return rs === showSeason;
+  if (showSeason > 1) {
+    if (rs === showSeason) return true;
+    if (rs != null) return false;
+    if (markerTokens && markerTokens.size && resultMatchesShow(title, markerTokens, 1)) return true;
+    return false;
+  }
   return !rs || rs === 1;
 }
 var YEAR_RE = /(?:^|[\s._\[(\-])(19[3-9]\d|20\d{2})(?=[\s._\])\-]|$)/g;
@@ -272,6 +299,7 @@ function searchContext(query, mode) {
     mode,
     showTokens: buildTitleTokens(titles),
     showSeason: detectShowSeason(titles),
+    seasonMarks: seasonMarkerTokens(titles),
     showYears: detectShowYears(titles),
     minHits: primaryTokens.size >= 3 ? 2 : 1,
     episode: query.episode,
@@ -280,6 +308,7 @@ function searchContext(query, mode) {
     resolution: query.resolution || ""
   };
 }
+var CANDIDATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1e3;
 function timeOf(r) {
   const t = r.date && typeof r.date.getTime === "function" ? r.date.getTime() : 0;
   return Number.isFinite(t) ? t : 0;
@@ -350,7 +379,7 @@ function finalize(results, ctx, limit = 30) {
   } else {
     const wanted = typeof ctx === "string" ? null : wantedEpisodes(ctx);
     const showSeason = typeof ctx === "string" || ctx && ctx.offsetResolved ? null : ctx.showSeason;
-    kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).filter((r) => resultMatchesSeason(r.title, showSeason)).map((r) => ({ ...r, accuracy: "low" }));
+    kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).filter((r) => resultMatchesSeason(r.title, showSeason, typeof ctx === "string" ? null : ctx.seasonMarks)).map((r) => ({ ...r, accuracy: "low" }));
   }
   return sortResults(kept, resolution).slice(0, limit).map(stripInternal);
 }
@@ -465,7 +494,7 @@ function classifyResult(title, opts) {
   const minHits = opts.minHits != null ? opts.minHits : showTokens && showTokens.size >= 3 ? 2 : 1;
   if (!resultMatchesShow(title, showTokens, minHits)) return null;
   const offset = usesOffsetEpisode(opts);
-  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason);
+  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason, opts.seasonMarks);
   const yearOk = resultMatchesYear(title, opts.showYears);
   const isBatch = looksLikeBatch(title);
   if (opts.mode === "batch") {

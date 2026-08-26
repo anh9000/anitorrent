@@ -8,6 +8,7 @@ var TRACKERS = [
   "udp://tracker.openbittorrent.com:6969/announce",
   "http://nyaa.tracker.wf:7777/announce"
 ];
+var CANDIDATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1e3;
 function buildMagnet(hash, name) {
   const trackers = TRACKERS.map((t) => "tr=" + encodeURIComponent(t)).join("&");
   const dn = name ? "&dn=" + encodeURIComponent(name) : "";

@@ -47,7 +47,11 @@ async function rssSearchWithRetry (query) {
       return await rssSearch(query)
     } catch (err) {
       if (!err.rateLimited || attempt >= RETRY_DELAYS.length) {
-        if (err.rateLimited) throw new Error('Nyaa is rate limiting requests for the ToonsHub feed. Wait a moment and try again.')
+        if (err.rateLimited) {
+          const fatal = new Error('Nyaa is rate limiting requests for the ToonsHub feed. Wait a moment and try again.')
+          fatal.rateLimited = true
+          throw fatal
+        }
         throw err
       }
       const base = err.retryAfter != null ? err.retryAfter : RETRY_DELAYS[attempt]

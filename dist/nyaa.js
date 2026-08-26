@@ -156,20 +156,21 @@ function resultMatchesShow(title, tokens, minHits = 1) {
   }
   return false;
 }
-var ROMAN_SEASON = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
+var ROMAN_SEASON = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9 };
 function detectResultSeason(title) {
   const t = String(title || "");
   let m = t.match(/\bS(\d{1,2})(?:E\d|\b)/i);
   if (m) return parseInt(m[1], 10);
   m = t.match(/\b(?:Season\s+(\d+)|(\d+)(?:st|nd|rd|th)\s+Season)\b/i);
   if (m) return parseInt(m[1] || m[2], 10);
-  m = t.match(/\b[A-Za-z]+\s+(II|III|IV|V|VI|VII|VIII|IX|X)(?=\s|:|\.|-|$|\[|\()/);
+  m = t.match(/\b[A-Za-z0-9]+\s+(II|III|IV|V|VI|VII|VIII|IX)(?=\s|:|\.|-|$|\[|\()/);
   if (m) return ROMAN_SEASON[m[1]];
   const digitRE = /\b([2-9])(?=\s*$|\s*[:\-|(\[])/g;
   let dm;
   while ((dm = digitRE.exec(t)) !== null) {
     const before = t.slice(Math.max(0, dm.index - 8), dm.index).toLowerCase();
     if (/\bpart\s+$/.test(before)) continue;
+    if (/^-[A-Za-z]/.test(t.slice(dm.index + 1))) continue;
     return parseInt(dm[1], 10);
   }
   return null;
@@ -182,9 +183,35 @@ function detectShowSeason(titles) {
   }
   return max || 1;
 }
-function resultMatchesSeason(title, showSeason) {
+function seasonMarkerTokens(titles) {
+  const list = titles || [];
+  const franchise = /* @__PURE__ */ new Set();
+  for (const t of list) {
+    const raw = String(t);
+    const colon = raw.indexOf(":");
+    for (const tok of significantTokens(colon > 0 ? raw.slice(0, colon) : raw)) franchise.add(tok);
+  }
+  const marks = /* @__PURE__ */ new Set();
+  for (const t of list) {
+    const raw = String(t);
+    if (detectResultSeason(raw) != null) continue;
+    const colon = raw.indexOf(":");
+    if (colon <= 0) continue;
+    if (!significantTokens(raw.slice(0, colon)).length) continue;
+    for (const tok of significantTokens(raw.slice(colon + 1))) {
+      if (!franchise.has(tok)) marks.add(tok);
+    }
+  }
+  return marks;
+}
+function resultMatchesSeason(title, showSeason, markerTokens) {
   const rs = detectResultSeason(title);
-  if (showSeason > 1) return rs === showSeason;
+  if (showSeason > 1) {
+    if (rs === showSeason) return true;
+    if (rs != null) return false;
+    if (markerTokens && markerTokens.size && resultMatchesShow(title, markerTokens, 1)) return true;
+    return false;
+  }
   return !rs || rs === 1;
 }
 var YEAR_RE = /(?:^|[\s._\[(\-])(19[3-9]\d|20\d{2})(?=[\s._\])\-]|$)/g;
@@ -290,6 +317,7 @@ async function collectFeed(queries, fetchItems, mapItem, ctx, sourceDefault, opt
         absorb(await fetchItems(q));
       } catch (err) {
         lastError = err;
+        if (err && err.rateLimited) return;
         continue;
       }
       if (stopWhenFound && foundEpisode()) return;
@@ -298,6 +326,7 @@ async function collectFeed(queries, fetchItems, mapItem, ctx, sourceDefault, opt
   await phase(queries.bases, false);
   if (!collected.length && lastError) throw lastError;
   if (queries.numbered.length && !foundEpisode()) await phase(queries.numbered, true);
+  if (!collected.length && lastError) throw lastError;
   return shaped;
 }
 var ANILIST_API = "https://graphql.anilist.co";
@@ -356,6 +385,7 @@ function searchContext(query, mode) {
     mode,
     showTokens: buildTitleTokens(titles),
     showSeason: detectShowSeason(titles),
+    seasonMarks: seasonMarkerTokens(titles),
     showYears: detectShowYears(titles),
     minHits: primaryTokens.size >= 3 ? 2 : 1,
     episode: query.episode,
@@ -368,7 +398,7 @@ function shapeResult(r, ctx, sourceDefault) {
   const tier = classifyResult(r.title, ctx);
   if (tier === null) return null;
   const out = { ...r, _tier: tier, accuracy: tagAccuracy(tier, r.date?.getTime?.(), sourceDefault) };
-  if (tier === "B") out.type = "batch";
+  if (tier === "B" || looksLikeBatch(r.title)) out.type = "batch";
   return out;
 }
 function shapeAll(items, ctx, sourceDefault) {
@@ -383,18 +413,31 @@ function shapeAll(items, ctx, sourceDefault) {
   const exact = shape({ ...ctx, episodeCandidates: null });
   if (ctx.episode != null) ctx.chosenEpisodes = /* @__PURE__ */ new Set([ctx.episode]);
   if (!ctx.episodeCandidates || ctx.episodeCandidates.size <= 1) return exact;
-  let best = null;
+  const scored = [];
   for (const n of ctx.episodeCandidates) {
     const shaped = shape({ ...ctx, episodeCandidates: /* @__PURE__ */ new Set([n]) });
     const newest = newestOf(shaped);
     if (newest == null) continue;
-    if (!best || newest > best.newest) best = { newest, shaped, episode: n };
+    scored.push({ newest, shaped, episode: n });
   }
-  if (!best) return exact;
-  ctx.chosenEpisodes = /* @__PURE__ */ new Set([best.episode]);
-  ctx.offsetResolved = best.episode !== ctx.episode;
-  return best.shaped;
+  if (!scored.length) return exact;
+  let best = scored[0];
+  for (const c of scored) if (c.newest > best.newest) best = c;
+  const kept = scored.filter((c) => best.newest - c.newest <= CANDIDATE_WINDOW_MS);
+  const chosen = new Set(kept.map((c) => c.episode));
+  ctx.chosenEpisodes = chosen;
+  ctx.offsetResolved = !chosen.has(ctx.episode);
+  if (kept.length === 1) return best.shaped;
+  const merged = /* @__PURE__ */ new Map();
+  for (const c of kept) {
+    for (const r of c.shaped) {
+      const prev = merged.get(r.hash);
+      if (!prev || r._tier < prev._tier) merged.set(r.hash, r);
+    }
+  }
+  return [...merged.values()];
 }
+var CANDIDATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1e3;
 function newestOf(results) {
   let newest = null;
   for (const r of results) {
@@ -474,7 +517,7 @@ function finalize(results, ctx, limit = 30) {
   } else {
     const wanted = typeof ctx === "string" ? null : wantedEpisodes(ctx);
     const showSeason = typeof ctx === "string" || ctx && ctx.offsetResolved ? null : ctx.showSeason;
-    kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).filter((r) => resultMatchesSeason(r.title, showSeason)).map((r) => ({ ...r, accuracy: "low" }));
+    kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).filter((r) => resultMatchesSeason(r.title, showSeason, typeof ctx === "string" ? null : ctx.seasonMarks)).map((r) => ({ ...r, accuracy: "low" }));
   }
   return sortResults(kept, resolution).slice(0, limit).map(stripInternal);
 }
@@ -589,7 +632,7 @@ function classifyResult(title, opts) {
   const minHits = opts.minHits != null ? opts.minHits : showTokens && showTokens.size >= 3 ? 2 : 1;
   if (!resultMatchesShow(title, showTokens, minHits)) return null;
   const offset = usesOffsetEpisode(opts);
-  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason);
+  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason, opts.seasonMarks);
   const yearOk = resultMatchesYear(title, opts.showYears);
   const isBatch = looksLikeBatch(title);
   if (opts.mode === "batch") {
@@ -646,6 +689,9 @@ function parseSize(text) {
   }[unit] || 1;
   return Math.round(value * mult);
 }
+function decodeEntities(str) {
+  return String(str).replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10))).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+}
 function pickTag(xml, tag) {
   const open = "<" + tag + ">";
   const close = "</" + tag + ">";
@@ -657,7 +703,7 @@ function pickTag(xml, tag) {
   if (val.startsWith("<![CDATA[") && val.endsWith("]]>")) {
     val = val.slice(9, -3);
   }
-  return val.trim();
+  return decodeEntities(val).trim();
 }
 function pickItems(xml) {
   const out = [];
@@ -708,7 +754,11 @@ async function rssSearchWithRetry(query) {
       return await rssSearch(query);
     } catch (err) {
       if (!err.rateLimited || attempt >= RETRY_DELAYS.length) {
-        if (err.rateLimited) throw new Error("Nyaa is rate limiting requests. Wait a moment and try again.");
+        if (err.rateLimited) {
+          const fatal = new Error("Nyaa is rate limiting requests. Wait a moment and try again.");
+          fatal.rateLimited = true;
+          throw fatal;
+        }
         throw err;
       }
       const base = err.retryAfter != null ? err.retryAfter : RETRY_DELAYS[attempt];

@@ -135,7 +135,7 @@ export function resultMatchesShow (title, tokens, minHits = 1) {
   return false
 }
 
-const ROMAN_SEASON = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 }
+const ROMAN_SEASON = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9 }
 
 // Extract a season number from a single title string, or null if none found.
 // Handles "SxxExx", "Season 2", "2nd Season", trailing Roman numeral, trailing
@@ -154,7 +154,7 @@ export function detectResultSeason (title) {
   m = t.match(/\b(?:Season\s+(\d+)|(\d+)(?:st|nd|rd|th)\s+Season)\b/i)
   if (m) return parseInt(m[1] || m[2], 10)
   // Trailing Roman numeral after a word: "Foo II", "Die Neue These IV"
-  m = t.match(/\b[A-Za-z]+\s+(II|III|IV|V|VI|VII|VIII|IX|X)(?=\s|:|\.|-|$|\[|\()/)
+  m = t.match(/\b[A-Za-z0-9]+\s+(II|III|IV|V|VI|VII|VIII|IX)(?=\s|:|\.|-|$|\[|\()/)
   if (m) return ROMAN_SEASON[m[1]]
   // Trailing single digit 2-9 at end / before delimiter, but SKIP when
   // preceded by "Part". "Part N" is ambiguous in anime naming: sometimes it
@@ -167,6 +167,7 @@ export function detectResultSeason (title) {
   while ((dm = digitRE.exec(t)) !== null) {
     const before = t.slice(Math.max(0, dm.index - 8), dm.index).toLowerCase()
     if (/\bpart\s+$/.test(before)) continue
+    if (/^-[A-Za-z]/.test(t.slice(dm.index + 1))) continue
     return parseInt(dm[1], 10)
   }
   return null
@@ -195,9 +196,36 @@ export function detectShowSeason (titles) {
 //   - Show is S1: reject only results that explicitly claim a higher season
 //     (so "Foo Season 2 - 01" does not leak into a plain "Foo" search).
 //     Bare unmarked results are fine.
-export function resultMatchesSeason (title, showSeason) {
+export function seasonMarkerTokens (titles) {
+  const list = titles || []
+  const franchise = new Set()
+  for (const t of list) {
+    const raw = String(t)
+    const colon = raw.indexOf(':')
+    for (const tok of significantTokens(colon > 0 ? raw.slice(0, colon) : raw)) franchise.add(tok)
+  }
+  const marks = new Set()
+  for (const t of list) {
+    const raw = String(t)
+    if (detectResultSeason(raw) != null) continue
+    const colon = raw.indexOf(':')
+    if (colon <= 0) continue
+    if (!significantTokens(raw.slice(0, colon)).length) continue
+    for (const tok of significantTokens(raw.slice(colon + 1))) {
+      if (!franchise.has(tok)) marks.add(tok)
+    }
+  }
+  return marks
+}
+
+export function resultMatchesSeason (title, showSeason, markerTokens) {
   const rs = detectResultSeason(title)
-  if (showSeason > 1) return rs === showSeason
+  if (showSeason > 1) {
+    if (rs === showSeason) return true
+    if (rs != null) return false
+    if (markerTokens && markerTokens.size && resultMatchesShow(title, markerTokens, 1)) return true
+    return false
+  }
   return !rs || rs === 1
 }
 
@@ -346,6 +374,7 @@ export async function collectFeed (queries, fetchItems, mapItem, ctx, sourceDefa
         absorb(await fetchItems(q))
       } catch (err) {
         lastError = err
+        if (err && err.rateLimited) return
         continue
       }
       if (stopWhenFound && foundEpisode()) return
@@ -360,6 +389,7 @@ export async function collectFeed (queries, fetchItems, mapItem, ctx, sourceDefa
   await phase(queries.bases, false)
   if (!collected.length && lastError) throw lastError
   if (queries.numbered.length && !foundEpisode()) await phase(queries.numbered, true)
+  if (!collected.length && lastError) throw lastError
   return shaped
 }
 
@@ -441,6 +471,7 @@ export function searchContext (query, mode) {
     mode,
     showTokens: buildTitleTokens(titles),
     showSeason: detectShowSeason(titles),
+    seasonMarks: seasonMarkerTokens(titles),
     showYears: detectShowYears(titles),
     minHits: primaryTokens.size >= 3 ? 2 : 1,
     episode: query.episode,
@@ -455,7 +486,7 @@ export function shapeResult (r, ctx, sourceDefault) {
   const tier = classifyResult(r.title, ctx)
   if (tier === null) return null
   const out = { ...r, _tier: tier, accuracy: tagAccuracy(tier, r.date?.getTime?.(), sourceDefault) }
-  if (tier === 'B') out.type = 'batch'
+  if (tier === 'B' || looksLikeBatch(r.title)) out.type = 'batch'
   return out
 }
 
@@ -484,18 +515,32 @@ export function shapeAll (items, ctx, sourceDefault) {
   // all of them let a two-year-old ep 28 sit beside today's ep 41. Score each
   // on its own and keep the single freshest: the episode being asked for is the
   // one that was just uploaded.
-  let best = null
+  const scored = []
   for (const n of ctx.episodeCandidates) {
     const shaped = shape({ ...ctx, episodeCandidates: new Set([n]) })
     const newest = newestOf(shaped)
     if (newest == null) continue
-    if (!best || newest > best.newest) best = { newest, shaped, episode: n }
+    scored.push({ newest, shaped, episode: n })
   }
-  if (!best) return exact
-  ctx.chosenEpisodes = new Set([best.episode])
-  ctx.offsetResolved = best.episode !== ctx.episode
-  return best.shaped
+  if (!scored.length) return exact
+  let best = scored[0]
+  for (const c of scored) if (c.newest > best.newest) best = c
+  const kept = scored.filter(c => best.newest - c.newest <= CANDIDATE_WINDOW_MS)
+  const chosen = new Set(kept.map(c => c.episode))
+  ctx.chosenEpisodes = chosen
+  ctx.offsetResolved = !chosen.has(ctx.episode)
+  if (kept.length === 1) return best.shaped
+  const merged = new Map()
+  for (const c of kept) {
+    for (const r of c.shaped) {
+      const prev = merged.get(r.hash)
+      if (!prev || r._tier < prev._tier) merged.set(r.hash, r)
+    }
+  }
+  return [...merged.values()]
 }
+
+const CANDIDATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
 function newestOf (results) {
   let newest = null
@@ -607,7 +652,7 @@ export function finalize (results, ctx, limit = 30) {
       // is the same kind of mismatch: asking for season 4 was turning up a dub
       // sitting on S03E12 and season 1 to 3 Bluray packs. Titles that name no
       // season still pass.
-      .filter(r => resultMatchesSeason(r.title, showSeason))
+      .filter(r => resultMatchesSeason(r.title, showSeason, typeof ctx === 'string' ? null : ctx.seasonMarks))
       .map(r => ({ ...r, accuracy: 'low' }))
   }
   return sortResults(kept, resolution).slice(0, limit).map(stripInternal)
@@ -752,7 +797,7 @@ export function classifyResult (title, opts) {
   const minHits = opts.minHits != null ? opts.minHits : (showTokens && showTokens.size >= 3 ? 2 : 1)
   if (!resultMatchesShow(title, showTokens, minHits)) return null
   const offset = usesOffsetEpisode(opts)
-  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason)
+  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason, opts.seasonMarks)
   const yearOk = resultMatchesYear(title, opts.showYears)
   const isBatch = looksLikeBatch(title)
   if (opts.mode === 'batch') {
@@ -811,6 +856,17 @@ export function parseSize (text) {
   return Math.round(value * mult)
 }
 
+export function decodeEntities (str) {
+  return String(str)
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
 export function pickTag (xml, tag) {
   const open = '<' + tag + '>'
   const close = '</' + tag + '>'
@@ -822,7 +878,7 @@ export function pickTag (xml, tag) {
   if (val.startsWith('<![CDATA[') && val.endsWith(']]>')) {
     val = val.slice(9, -3)
   }
-  return val.trim()
+  return decodeEntities(val).trim()
 }
 
 export function pickItems (xml) {

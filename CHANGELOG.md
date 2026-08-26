@@ -4,6 +4,38 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.18] - 2026-08-26 (stable)
+
+Per-source bumps: `nyaa 1.0.30`, `animetosho 1.0.23`, `subsplease 1.0.21`, `yameii 1.0.27`, `toonshub 1.0.24`. Seadex unchanged.
+
+Findings from an adversarial audit of the matching pipeline, each reproduced before being fixed.
+
+### Fixed
+
+- **A season past the first deleted most of its own releases.** The season check required the filename to carry a matching season number, so any release named with an arc subtitle instead of a number was thrown away. That is how most later seasons are actually named. Measured across the 297-show fixture: 150 of 388 legitimate releases were being discarded and 30 shows returned an empty picker, to prevent a single cross-season leak. A season subtitle that the show's own titles carry (`Yuukaku-hen`, `The Final Season`) now satisfies the check on its own. Subtitle words are only trusted when they come from a title that carries no season number of its own, which is what keeps `Mushoku Tensei II` from accepting the season 1 release, since both share the subtitle `Isekai Ittara Honki Dasu`. Verified end to end: Kimetsu no Yaiba Yuukaku-hen now matches its own release and rejects both season 1 and the sibling Katanakaji arc, while Youjo Senki II and Mushoku Tensei still reject their season 1 releases.
+
+- **An uppercase X in a title was read as the Roman numeral 10.** `Tiger X Dragon`, a real Toradora synonym, made the show season 10, so every genuine Toradora release failed the season check. X is no longer treated as a season numeral; a tenth season is always written `Season 10` or `S10`, both already handled. Toradora goes from an empty picker to 10 results on nyaa.
+
+- **Only one episode-numbering scheme survived, deleting releases that used the other.** For a show numbered continuously by some groups and per-season by others, the code kept whichever scheme had the single newest upload and discarded the rest. A routine v2 re-upload of an unrelated episode could win that comparison and become the only row in the picker. Every scheme whose newest match is within a week of the best is now kept and merged. A years-old file from a finished cour still cannot hijack the search.
+
+- **Romanized numbers were read as seasons.** `5-toubun no Hanayome`, `Kaijuu 8-gou` and `3-gatsu no Lion` were detected as seasons 5, 8 and 3. A digit followed by a hyphen and a letter is romanization, never a season marker.
+
+- **A Roman numeral after a number was missed.** `Mob Psycho 100 III` reported season 1 from the title and no season from its own release, so the two disagreed. Both now read 3.
+
+- **XML entities were never decoded**, so rows in the picker read `I&#39;m` and `&amp;` instead of `I'm` and `&`.
+
+- **Rate limiting restarted from scratch on every query.** When a source exhausted its retries the failure lost its rate-limited marker, so the next query began a fresh set of attempts against a host already refusing traffic. One search could reach 18 requests. A rate-limit failure now stops that source immediately, and a rate limit hit during the second query round is reported instead of being swallowed into an empty picker.
+
+- **Multi-episode packs were not marked as packs in movie mode**, so Hayase received a season pack as though it were a single file.
+
+### Verified
+
+- Cross-source matrix over 6 shows against all five sources: 216 results, 0 wrong season, 0 off-show, 0 internal fields leaked, 0 undecoded entities. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures. The AnimeTosho limitation on BLEACH: The Calamity documented in v1.6.16 is unchanged.
+
+### Known limitation
+
+- Relaxing the season rule trades a small amount of precision for a large amount of recall. In a worst-case harness that feeds every sibling season's release names directly, cross-season leakage rises from 1 to 20 of 325 while legitimate releases kept rise from 119 to 155 and empty pickers fall from 30 to 15. Shows whose season subtitle is not separated by a colon (`Haikyuu!! TO THE TOP`, `Noragami ARAGOTO`) are not helped and can still come back thin.
+
 ## [1.6.17] - 2026-08-26 (stable)
 
 Per-source bumps: `nyaa 1.0.29`, `animetosho 1.0.22`, `subsplease 1.0.20`, `yameii 1.0.26`, `toonshub 1.0.23`. Seadex unchanged.
