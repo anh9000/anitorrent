@@ -122,6 +122,30 @@ export function stripLangCodes (title) {
   return String(title).replace(/\[[A-Z]{2,3}(?:-[A-Z]{2,3})?\]/g, ' ')
 }
 
+// The part of a filename that names the show: the group tag is dropped and
+// everything from the episode marker onward is cut, taking the LAST marker so
+// an arc subtitle stays in ("Made in Abyss - Retsujitsu no Ougonkyou - 04").
+export function showNamePart (title) {
+  let t = String(title || '').replace(/^\s*[[(\u3010][^\])\u3011]*[\])\u3011]\s*/, '')
+  const m = t.match(/^(.*?)(?=(?:[\s._][-~]\s*\d{1,4}(?:v\d)?(?:[\s[(]|$))|(?:\s*\bS\d{1,2}E\d{1,4}\b)|(?:\s*\bEP\s*\d{1,4}\b))(?![\s\S]*(?:[\s._][-~]\s*\d{1,4}(?:v\d)?(?:[\s[(]|$)|\s*\bS\d{1,2}E\d{1,4}\b|\s*\bEP\s*\d{1,4}\b))/i)
+  if (m && m[1].trim()) return m[1].trim()
+  const simple = t.split(/[[(]/)[0]
+  return (simple || t).trim()
+}
+
+// A show whose whole identity is one word is trivially satisfied by any release
+// that happens to contain it: "Another" matched "In Another World With My
+// Smartphone", "Monster" matched "Monster Musume no Oisha-san". For those shows
+// the name in the filename must not introduce a significant word the show does
+// not have, which also separates a season from its own sequel arc.
+export function nameIntroducesForeignWord (title, tokens) {
+  for (const tok of significantTokens(showNamePart(title))) {
+    if (/^\d+$/.test(tok)) continue
+    if (!tokens.has(tok)) return true
+  }
+  return false
+}
+
 export function resultMatchesShow (title, tokens, minHits = 1) {
   if (!tokens.size) return true
   const lower = stripLangCodes(title).toLowerCase()
@@ -322,7 +346,13 @@ export function buildQueries (titles, opts = {}) {
     seen.add(a)
     rescue.push(a)
   }
-  const withEp = q => opts.episode == null ? [] : [q + ' ' + pad(opts.episode)]
+  const epNumbers = []
+  if (opts.episodeCandidates && opts.episodeCandidates.size) {
+    for (const n of opts.episodeCandidates) epNumbers.push(n)
+  } else if (opts.episode != null) {
+    epNumbers.push(opts.episode)
+  }
+  const withEp = q => epNumbers.map(n => q + ' ' + pad(n))
   const numbered = [
     ...bases.flatMap(withEp),
     ...rescue,
@@ -741,8 +771,9 @@ export const GENERIC_QUERY_WORDS = new Set([
 ])
 
 export function trimTitleForQuery (title) {
-  const colon = title.indexOf(':')
-  const base = colon > 0 ? title.slice(0, colon) : title
+  const raw = String(title || '')
+  const colon = raw.indexOf(':')
+  const base = colon > 0 ? raw.slice(0, colon) : raw
   const fromBase = significantTokens(base).slice(0, 4).join(' ')
   if (fromBase) return fromBase
   // The part before the colon can be too short to search on its own, as in
@@ -756,12 +787,20 @@ export function trimTitleForQuery (title) {
   // "DAN DA DAN: FIRST ENCOUNTER" as "first encounter", which is generic
   // enough to return unrelated shows. Keeping the words yields a query that
   // simply finds nothing when it is wrong, which is the safer failure.
-  const words = escapeQuery(title).split(/\s+/).filter(Boolean).slice(0, 4).join(' ')
-  return words || escapeQuery(title)
+  const baseWords = escapeQuery(base).split(/\s+/).filter(Boolean)
+  const usePreColon = baseWords.length >= 2
+  const source = usePreColon ? baseWords : escapeQuery(raw).split(/\s+/).filter(Boolean)
+  const trimmed = source.slice(0, 4)
+  if (!usePreColon) {
+    while (trimmed.length > 1 && STOPWORDS.has(trimmed[trimmed.length - 1].toLowerCase())) trimmed.pop()
+  }
+  const words = trimmed.join(' ')
+  return words || escapeQuery(raw)
 }
 
 export function rankTitlesForQuery (titles) {
   const list = (titles || [])
+    .filter(t => typeof t === 'string' && t.trim())
     .map((t, i) => {
       const stripped = String(t).replace(/\s/g, '')
       const ascii = escapeQuery(t).replace(/\s/g, '')
@@ -839,6 +878,7 @@ export function classifyResult (title, opts) {
   const showTokens = opts.showTokens
   const minHits = opts.minHits != null ? opts.minHits : (showTokens && showTokens.size >= 3 ? 2 : 1)
   if (!resultMatchesShow(title, showTokens, minHits)) return null
+  if (showTokens && showTokens.size === 1 && nameIntroducesForeignWord(title, showTokens)) return null
   const offset = usesOffsetEpisode(opts)
   const seasonOk = offset || resultMatchesSeason(title, opts.showSeason, opts.seasonMarks)
   const yearOk = resultMatchesYear(title, opts.showYears)

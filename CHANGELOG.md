@@ -4,6 +4,30 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.20] - 2026-08-26 (stable)
+
+Per-source bumps: `nyaa 1.0.32`, `animetosho 1.0.25`, `subsplease 1.0.23`, `yameii 1.0.29`, `toonshub 1.0.26`. Seadex unchanged.
+
+The remaining audit findings, each re-verified against current code before being fixed.
+
+### Fixed
+
+- **A show named after one common word accepted any release containing that word.** Sixteen shows in the 297-show fixture reduce to a single token, and one matching word was enough to call a release an exact match. `Another` accepted `In Another World With My Smartphone`, `Monster` accepted `Monster Musume no Oisha-san`, `Idol` accepted `Idol Bu Show`. For these shows the name in the filename, taken after the group tag and before the episode marker, must now introduce no significant word the show does not have. Their own releases are unaffected: Made in Abyss, Dorohedoro, Horimiya, Clannad, Naruto and Bleach all still find theirs.
+
+- **Made in Abyss season 1 accepted its own season 2 release** as an exact match, for the same reason. `Made in Abyss - Retsujitsu no Ougonkyou - 04` introduces words season 1 does not have and is now rejected, while `Made in Abyss - 04` is kept.
+
+- **SubsPlease could not match an absolutely numbered show at all.** It passed the whole candidate set at once, so the offset was never recognised as resolved and the season check was never lifted. Re:Zero season 4 episode 12 returned nothing even though SubsPlease carries it as episode 78. Candidates are now tried one at a time, as the other sources already did, and the freshest match wins. That search returns 3 results.
+
+- **The episode-numbered query round only ever asked for the literal episode number.** For a show numbered continuously it asked for `bleach 01` and never `bleach 41`, so an older episode that had fallen off the feed's recent page could not be reached at all. The round now asks for every resolved numbering.
+
+- **A title whose distinguishing words sit after a colon produced a dead query.** `86: Eighty Six Part 2` searched for `86 Eighty Six Part`, and nyaa requires every word, so no episode file could match. Trailing filler words are dropped, and a title with at least two words before the colon uses those instead: `DAN DA DAN: FIRST ENCOUNTER` searches `DAN DA DAN` rather than `DAN DA DAN FIRST`.
+
+- **A null entry among the titles crashed every source** with a raw TypeError before any request was made.
+
+### Verified
+
+- Cross-source matrix over 7 shows against all five sources: 232 results, 0 wrong season, 0 off-show, 0 internal fields leaked. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures. Two audit claims were re-tested and did not reproduce against current code, so nothing was changed for them: a generic English word entering the token set (the two-token-hit rule already rejects the decoys) and single episodes being misread as packs.
+
 ## [1.6.19] - 2026-08-26 (stable)
 
 Per-source bumps: `nyaa 1.0.31`, `animetosho 1.0.24`, `subsplease 1.0.22`, `yameii 1.0.28`, `toonshub 1.0.25`. Seadex unchanged.

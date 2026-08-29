@@ -132,8 +132,8 @@ async function runSearch (query, mode) {
   }
   if (!entries.length && lastError) throw lastError
 
-  const build = useCandidates => {
-    const epCtx = useCandidates ? ctx : { ...ctx, episodeCandidates: null }
+  const build = candidateSet => {
+    const epCtx = candidateSet ? { ...ctx, episodeCandidates: candidateSet } : { ...ctx, episodeCandidates: null }
     const shaped = []
     for (const e of entries) {
       const tier = classifyResult(e.key, epCtx)
@@ -152,10 +152,25 @@ async function runSearch (query, mode) {
     return shaped
   }
 
-  let shaped = build(false)
-  if (!shaped.some(s => s.tier === 'A') && ctx.episodeCandidates?.size > 1) {
-    const relaxed = build(true)
-    if (relaxed.some(s => s.tier === 'A')) shaped = relaxed
+  let shaped = build(null)
+  if (!shaped.some(s => s.tier === 'A') && ctx.episodeCandidates && ctx.episodeCandidates.size) {
+    let best = null
+    for (const n of ctx.episodeCandidates) {
+      const cand = build(new Set([n]))
+      const hits = cand.filter(x => x.tier === 'A')
+      if (!hits.length) continue
+      let newest = 0
+      for (const h of hits) {
+        const t = new Date(h.entry.release_date || 0).getTime()
+        if (Number.isFinite(t) && t > newest) newest = t
+      }
+      if (!best || newest > best.newest) best = { newest, shaped: cand, episode: n }
+    }
+    if (best) {
+      shaped = best.shaped
+      ctx.chosenEpisodes = new Set([best.episode])
+      ctx.offsetResolved = best.episode !== ctx.episode
+    }
   }
 
   const out = []
