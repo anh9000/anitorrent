@@ -248,11 +248,12 @@ var offsetCache = /* @__PURE__ */ new Map();
 async function fetchPrequelChain(anilistId) {
   const seen = /* @__PURE__ */ new Set();
   const counts = [];
+  let nextAiring = null;
   let current = Number(anilistId);
   for (let depth = 0; depth < 12 && current && !seen.has(current); depth++) {
     seen.add(current);
     const body = JSON.stringify({
-      query: "query($id:Int){Media(id:$id){episodes format relations{edges{relationType node{id episodes format}}}}}",
+      query: "query($id:Int){Media(id:$id){episodes format status nextAiringEpisode{episode} relations{edges{relationType node{id episodes format title{romaji english}}}}}}",
       variables: { id: current }
     });
     let media;
@@ -268,27 +269,59 @@ async function fetchPrequelChain(anilistId) {
       break;
     }
     if (!media) break;
+    if (depth === 0 && media.status === "RELEASING" && media.nextAiringEpisode) {
+      const n = Number(media.nextAiringEpisode.episode);
+      if (Number.isInteger(n) && n > 0) nextAiring = n;
+    }
     const prequel = (media.relations?.edges || []).filter((e) => e.relationType === "PREQUEL").map((e) => e.node).filter((n) => n && (n.format === "TV" || n.format === "ONA" || n.format === "TV_SHORT")).sort((a, b) => (b.episodes || 0) - (a.episodes || 0))[0];
     if (!prequel || !prequel.episodes) break;
-    counts.push(prequel.episodes);
+    counts.push({
+      episodes: prequel.episodes,
+      tokens: buildTitleTokens([prequel.title?.romaji, prequel.title?.english].filter(Boolean))
+    });
     current = prequel.id;
   }
-  return counts;
+  return { counts, nextAiring };
+}
+function sharesSubSeries(showTokens, prequelTokens) {
+  if (!showTokens || !showTokens.size || !prequelTokens || !prequelTokens.size) return true;
+  let shared = 0;
+  for (const t of prequelTokens) if (showTokens.has(t)) shared++;
+  return shared / showTokens.size >= 0.5;
+}
+async function episodeNotAired(query) {
+  const ep = Number(query.episode);
+  if (!Number.isInteger(ep) || !query.anilistId) return false;
+  const key = String(query.anilistId);
+  if (!offsetCache.has(key)) {
+    offsetCache.set(key, fetchPrequelChain(query.anilistId).catch(() => ({ counts: [], nextAiring: null })));
+  }
+  const chain = await offsetCache.get(key);
+  const next = chain && chain.nextAiring;
+  return Number.isInteger(next) && ep >= next;
 }
 async function resolveEpisodeCandidates(query) {
   const ep = Number(query.episode);
   if (!Number.isInteger(ep) || !query.anilistId) return null;
   const key = String(query.anilistId);
   if (!offsetCache.has(key)) {
-    offsetCache.set(key, fetchPrequelChain(query.anilistId).catch(() => []));
+    offsetCache.set(key, fetchPrequelChain(query.anilistId).catch(() => ({ counts: [], nextAiring: null })));
   }
-  const counts = await offsetCache.get(key);
+  const chain = await offsetCache.get(key);
   const candidates = /* @__PURE__ */ new Set([ep]);
+  const showTokens = buildTitleTokens(query.titles || []);
   let running = 0;
-  for (const c of counts || []) {
-    running += c;
-    if (running >= 10) candidates.add(ep + running);
+  const list = chain && chain.counts || [];
+  for (let i = 0; i < list.length; i++) {
+    const entry = list[i];
+    const count = typeof entry === "number" ? entry : entry.episodes;
+    const tokens = typeof entry === "number" ? null : entry.tokens;
+    if (!count) continue;
+    const crossesRoot = !sharesSubSeries(showTokens, tokens);
+    if (crossesRoot && running >= 10) candidates.add(ep + running);
+    running += count;
   }
+  if (running >= 10) candidates.add(ep + running);
   return candidates;
 }
 function searchContext(query, mode) {
@@ -398,8 +431,10 @@ function wantedEpisodes(ctx) {
 async function withEpisodeCandidates(query) {
   try {
     const episodeCandidates = await resolveEpisodeCandidates(query);
-    if (!episodeCandidates || episodeCandidates.size <= 1) return query;
-    return { ...query, episodeCandidates };
+    const notAired = await episodeNotAired(query);
+    const out = notAired ? { ...query, notAired: true } : query;
+    if (!episodeCandidates || episodeCandidates.size <= 1) return out;
+    return { ...out, episodeCandidates };
   } catch {
     return query;
   }
@@ -628,6 +663,7 @@ function episodeMatchesAny(entry, query) {
 }
 async function runSearch(query, mode) {
   if (!query || !query.titles || !query.titles.length) return [];
+  if (query.notAired) return [];
   const ctx = searchContext(query, mode);
   const seenHashes = /* @__PURE__ */ new Set();
   const seenKeys = /* @__PURE__ */ new Set();

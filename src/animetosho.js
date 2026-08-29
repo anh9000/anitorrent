@@ -131,6 +131,7 @@ function classifyAndTag (raw, ctx) {
 
 async function search (query, mode) {
   if (!query) return []
+  if (query.notAired) return []
 
   const ctx = searchContext(query, mode)
   const resolvedAid = await resolveAnidbAid(query)

@@ -4,6 +4,22 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.19] - 2026-08-26 (stable)
+
+Per-source bumps: `nyaa 1.0.31`, `animetosho 1.0.24`, `subsplease 1.0.22`, `yameii 1.0.28`, `toonshub 1.0.25`. Seadex unchanged.
+
+### Fixed
+
+- **An episode that has not aired yet returned old episodes instead of nothing.** Asking for BLEACH: The Calamity episode 7, which has not been released, filled the picker with episode 34 marked as an exact match, plus season packs. Two separate causes.
+
+- The absolute episode number was being guessed from every partial sum along the prequel chain, so Calamity episode 7 produced candidates 7, 21, 34, 47 and 413. Only 47 is meaningful; 34 is episode 7 of the previous cour and happens to exist, so it matched and was promoted. Release groups number continuously from the start of a titled run, so only the total of a complete run is a real convention. Candidates are now emitted only where the chain crosses into a differently named work and at the end. Calamity episode 1 gives 1, 41 and 407, which are exactly the three conventions groups use, and Re:Zero season 4 episode 12 gives 12 and 78.
+
+- The literal episode number still matched episode 7 of an earlier cour. AniList publishes the next episode due to air for a show still running, and an episode at or beyond that number has not been released, so anything a feed offers under it belongs to another cour that reused the number. Sources now return nothing for such an episode. The check costs no extra request, since the airing status comes back with the prequel lookup already being made, and it applies only while a show is still running: finished shows and already aired episodes are untouched.
+
+### Verified
+
+- BLEACH: The Calamity episode 7 returns 0 results from all five sources, while episode 1 still returns the correct episode 41 releases. Re:Zero season 4 episode 12 (aired, show still running) unaffected at 19 and 3 results. Frieren, Toradora and SPY x FAMILY, all finished, unaffected. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures.
+
 ## [1.6.18] - 2026-08-26 (stable)
 
 Per-source bumps: `nyaa 1.0.30`, `animetosho 1.0.23`, `subsplease 1.0.21`, `yameii 1.0.27`, `toonshub 1.0.24`. Seadex unchanged.

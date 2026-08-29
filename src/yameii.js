@@ -95,6 +95,7 @@ function itemToResult (raw, opts) {
 
 async function runSearch (query, opts) {
   if (!query.titles || !query.titles.length) return []
+  if (query.notAired) return []
 
   const mode = opts.batch ? 'batch' : (opts.movie ? 'movie' : 'single')
   const ctx = searchContext(query, mode)
