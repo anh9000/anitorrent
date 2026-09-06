@@ -6,14 +6,13 @@
 </p>
 
 <p align="center">
-  <strong>Working Hayase extension pack for 2026.</strong> Drop-in replacement for the outdated <a href="https://github.com/hayase-app"><code>hayase-app</code></a> extensions (Nyaa, AnimeTosho, Seadex).<br>
-  Six auto-updating torrent sources: <strong>Nyaa</strong>, <strong>AnimeTosho</strong>, <strong>Seadex</strong>, <strong>SubsPlease</strong>, <strong>Yameii</strong> (English dubs), and <strong>ToonsHub</strong> (dual-audio).<br>
-  Works on Windows, macOS, Linux, and Hayase on Android. One install URL, no manual maintenance.
+  <strong>Six auto-updating torrent sources for Hayase.</strong> Drop-in replacement for the outdated <a href="https://github.com/hayase-app"><code>hayase-app</code></a> extensions.<br>
+  Nyaa, AnimeTosho, Seadex, SubsPlease, Yameii (English dubs) and ToonsHub (dual-audio). One install URL.
 </p>
 
 ## Install in Hayase
 
-Settings → Extensions → Repositories → paste → Import Extensions:
+Settings > Extensions > Repositories > paste > Import Extensions:
 
 ```
 https://raw.githubusercontent.com/anh9000/anitorrent/main/hayase/index.json
@@ -27,7 +26,7 @@ That's it. One-time action. Hayase auto-polls the manifest on every launch, so a
 https://raw.githubusercontent.com/anh9000/anitorrent/main/shiru/index.json
 ```
 
-Settings → Extensions → paste.
+Settings > Extensions > paste.
 
 > **Shiru note:** a [Shiru](https://github.com/RockinChaos/Shiru) manifest is also published, but this has **not been tested in an actual Shiru install**. The code was designed against the lowest-common-denominator API both apps accept, so it should work. If you try it in Shiru and hit a problem, please [open an issue](https://github.com/anh9000/anitorrent/issues) with the details.
 
@@ -79,7 +78,7 @@ What a search looks like (Nippon Sangoku, episode 7), pulling results from multi
 
 ### Curator picks (optional)
 
-These are personal picks that ship enabled by default but are entirely toggleable.<br>Disable them in Settings → Extensions if you don't want them.
+These are personal picks that ship enabled by default but are entirely toggleable.<br>Disable them in Settings > Extensions if you don't want them.
 
 ```text
 ┌────────────┬──────────┬────────────────────────────────────────────┐
