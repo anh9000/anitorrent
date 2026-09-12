@@ -8,6 +8,16 @@ var TRACKERS = [
   "udp://tracker.openbittorrent.com:6969/announce",
   "http://nyaa.tracker.wf:7777/announce"
 ];
+var RELATION_NODE = "id episodes format title{romaji english}";
+function nestedRelations(depth) {
+  let inner = RELATION_NODE;
+  for (let i = 0; i < depth; i++) {
+    inner = RELATION_NODE + " relations{edges{relationType node{" + inner + "}}}";
+  }
+  return inner;
+}
+var CHAIN_QUERY = "query($id:Int){Media(id:$id){episodes status nextAiringEpisode{episode} relations{edges{relationType node{" + nestedRelations(2) + "}}}}}";
+var STEP_QUERY = "query($id:Int){Media(id:$id){episodes format status nextAiringEpisode{episode} relations{edges{relationType node{" + RELATION_NODE + "}}}}}";
 var CANDIDATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1e3;
 function buildMagnet(hash, name) {
   const trackers = TRACKERS.map((t) => "tr=" + encodeURIComponent(t)).join("&");

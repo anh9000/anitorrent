@@ -265,43 +265,118 @@ function buildQueries(titles, opts = {}) {
 }
 var ANILIST_API = "https://graphql.anilist.co";
 var offsetCache = /* @__PURE__ */ new Map();
-async function fetchPrequelChain(anilistId) {
-  const seen = /* @__PURE__ */ new Set();
-  const counts = [];
-  let nextAiring = null;
-  let current = Number(anilistId);
-  for (let depth = 0; depth < 12 && current && !seen.has(current); depth++) {
-    seen.add(current);
-    const body = JSON.stringify({
-      query: "query($id:Int){Media(id:$id){episodes format status nextAiringEpisode{episode} relations{edges{relationType node{id episodes format title{romaji english}}}}}}",
-      variables: { id: current }
-    });
-    let media;
+var RELATION_NODE = "id episodes format title{romaji english}";
+function nestedRelations(depth) {
+  let inner = RELATION_NODE;
+  for (let i = 0; i < depth; i++) {
+    inner = RELATION_NODE + " relations{edges{relationType node{" + inner + "}}}";
+  }
+  return inner;
+}
+var CHAIN_QUERY = "query($id:Int){Media(id:$id){episodes status nextAiringEpisode{episode} relations{edges{relationType node{" + nestedRelations(2) + "}}}}}";
+var STEP_QUERY = "query($id:Int){Media(id:$id){episodes format status nextAiringEpisode{episode} relations{edges{relationType node{" + RELATION_NODE + "}}}}}";
+async function anilistQuery(query, id) {
+  const body = JSON.stringify({ query, variables: { id } });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 600 * attempt + Math.floor(Math.random() * 300)));
+    let res;
     try {
-      const res = await fetch(ANILIST_API, {
+      res = await fetch(ANILIST_API, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body
       });
-      if (!res.ok) break;
-      media = (await res.json())?.data?.Media;
     } catch {
+      continue;
+    }
+    if (res.status === 429) return void 0;
+    if (!res.ok) continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(await res.text());
+    } catch {
+      continue;
+    }
+    if (parsed && parsed.errors && !parsed.data) return void 0;
+    const media = parsed && parsed.data && parsed.data.Media;
+    return media || null;
+  }
+  return void 0;
+}
+function pickPrequel(node) {
+  const edges = node && node.relations && node.relations.edges || [];
+  return edges.filter((e) => e.relationType === "PREQUEL").map((e) => e.node).filter((n) => n && (n.format === "TV" || n.format === "ONA" || n.format === "TV_SHORT")).sort((a, b) => (b.episodes || 0) - (a.episodes || 0))[0];
+}
+function prequelEntry(node) {
+  return {
+    episodes: node.episodes,
+    tokens: buildTitleTokens([node.title && node.title.romaji, node.title && node.title.english].filter(Boolean))
+  };
+}
+function airingOf(media) {
+  if (media && media.status === "RELEASING" && media.nextAiringEpisode) {
+    const n = Number(media.nextAiringEpisode.episode);
+    if (Number.isInteger(n) && n > 0) return n;
+  }
+  return null;
+}
+async function fetchPrequelChain(anilistId) {
+  const root = await anilistQuery(CHAIN_QUERY, Number(anilistId));
+  if (root === void 0) return walkFrom(Number(anilistId), [], null, /* @__PURE__ */ new Set());
+  if (!root) return { counts: [], nextAiring: null, ok: true };
+  const nextAiring = airingOf(root);
+  const counts = [];
+  const seen = /* @__PURE__ */ new Set([Number(anilistId)]);
+  let node = root;
+  let lastId = Number(anilistId);
+  while (counts.length < 12) {
+    const prequel = pickPrequel(node);
+    if (!prequel || !prequel.episodes || seen.has(prequel.id)) break;
+    counts.push(prequelEntry(prequel));
+    seen.add(prequel.id);
+    lastId = prequel.id;
+    if (prequel.relations === void 0) break;
+    node = prequel;
+  }
+  if (!counts.length) return { counts, nextAiring, ok: true };
+  const rest = await walkFrom(lastId, counts, nextAiring, seen);
+  return rest;
+}
+async function walkFrom(startId, counts, nextAiring, seen) {
+  let ok = true;
+  let current = startId;
+  for (let depth = 0; depth < 12 && current; depth++) {
+    const media = await anilistQuery(STEP_QUERY, current);
+    if (media === void 0) {
+      ok = false;
       break;
     }
     if (!media) break;
-    if (depth === 0 && media.status === "RELEASING" && media.nextAiringEpisode) {
-      const n = Number(media.nextAiringEpisode.episode);
-      if (Number.isInteger(n) && n > 0) nextAiring = n;
-    }
-    const prequel = (media.relations?.edges || []).filter((e) => e.relationType === "PREQUEL").map((e) => e.node).filter((n) => n && (n.format === "TV" || n.format === "ONA" || n.format === "TV_SHORT")).sort((a, b) => (b.episodes || 0) - (a.episodes || 0))[0];
-    if (!prequel || !prequel.episodes) break;
-    counts.push({
-      episodes: prequel.episodes,
-      tokens: buildTitleTokens([prequel.title?.romaji, prequel.title?.english].filter(Boolean))
-    });
+    if (depth === 0 && nextAiring == null) nextAiring = airingOf(media);
+    const prequel = pickPrequel(media);
+    if (!prequel || !prequel.episodes || seen.has(prequel.id)) break;
+    counts.push(prequelEntry(prequel));
+    seen.add(prequel.id);
     current = prequel.id;
   }
-  return { counts, nextAiring };
+  return { counts, nextAiring, ok };
+}
+async function getChain(anilistId) {
+  const key = String(anilistId);
+  if (!offsetCache.has(key)) {
+    offsetCache.set(key, fetchPrequelChain(anilistId).catch(() => ({ counts: [], nextAiring: null, ok: false })));
+  }
+  let chain;
+  try {
+    chain = await offsetCache.get(key);
+  } catch {
+    chain = null;
+  }
+  if (!chain || chain.ok === false) {
+    offsetCache.delete(key);
+    return { counts: [], nextAiring: null, ok: false };
+  }
+  return chain;
 }
 function sharesSubSeries(showTokens, prequelTokens) {
   if (!showTokens || !showTokens.size || !prequelTokens || !prequelTokens.size) return true;
@@ -312,22 +387,14 @@ function sharesSubSeries(showTokens, prequelTokens) {
 async function episodeNotAired(query) {
   const ep = Number(query.episode);
   if (!Number.isInteger(ep) || !query.anilistId) return false;
-  const key = String(query.anilistId);
-  if (!offsetCache.has(key)) {
-    offsetCache.set(key, fetchPrequelChain(query.anilistId).catch(() => ({ counts: [], nextAiring: null })));
-  }
-  const chain = await offsetCache.get(key);
+  const chain = await getChain(query.anilistId);
   const next = chain && chain.nextAiring;
   return Number.isInteger(next) && ep >= next;
 }
 async function resolveEpisodeCandidates(query) {
   const ep = Number(query.episode);
   if (!Number.isInteger(ep) || !query.anilistId) return null;
-  const key = String(query.anilistId);
-  if (!offsetCache.has(key)) {
-    offsetCache.set(key, fetchPrequelChain(query.anilistId).catch(() => ({ counts: [], nextAiring: null })));
-  }
-  const chain = await offsetCache.get(key);
+  const chain = await getChain(query.anilistId);
   const candidates = /* @__PURE__ */ new Set([ep]);
   const showTokens = buildTitleTokens(query.titles || []);
   let running = 0;

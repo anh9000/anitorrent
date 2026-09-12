@@ -51,8 +51,15 @@ function isBatchEntry (entry) {
   return false
 }
 
-async function searchApi (q) {
-  const url = BASE + '?f=search&tz=UTC&s=' + encodeURIComponent(q)
+function toEntries (data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return []
+  return Object.entries(data).map(([key, entry]) => ({ key, ...entry }))
+}
+
+// SubsPlease answers its search endpoint with HTTP 200 and an empty body, for
+// every term. An empty body is not an error to report to the user, it just
+// means the endpoint gave nothing, so the caller falls back to the latest feed.
+async function fetchApi (url) {
   let res
   try {
     res = await fetch(url)
@@ -62,15 +69,32 @@ async function searchApi (q) {
   if (!res.ok) {
     throw new Error('SubsPlease returned HTTP ' + res.status + '. The site may be down.')
   }
-  let data
+  const text = (await res.text()).trim()
+  if (!text) return null
   try {
-    data = await res.json()
+    return toEntries(JSON.parse(text))
   } catch (err) {
-    throw new Error('SubsPlease returned an unexpected response.')
+    return null
   }
-  if (Array.isArray(data)) return []
-  if (!data || typeof data !== 'object') return []
-  return Object.entries(data).map(([key, entry]) => ({ key, ...entry }))
+}
+
+async function searchApi (q) {
+  const found = await fetchApi(BASE + '?f=search&tz=UTC&s=' + encodeURIComponent(q))
+  return found || []
+}
+
+let latestCache = null
+
+// The latest feed is what SubsPlease is for: currently airing weekly releases.
+// It is fetched once per session and filtered locally by the shared matching,
+// which keeps the source working while its search endpoint is broken.
+async function latestApi () {
+  if (!latestCache) {
+    latestCache = fetchApi(BASE + '?f=latest&tz=UTC').catch(() => null)
+  }
+  const entries = await latestCache
+  if (!entries) latestCache = null
+  return entries || []
 }
 
 function entryToResults (entry, opts) {
@@ -131,6 +155,14 @@ async function runSearch (query, mode) {
     }
   }
   if (!entries.length && lastError) throw lastError
+
+  if (!entries.length) {
+    for (const e of await latestApi()) {
+      if (seenKeys.has(e.key)) continue
+      seenKeys.add(e.key)
+      entries.push(e)
+    }
+  }
 
   const build = candidateSet => {
     const epCtx = candidateSet ? { ...ctx, episodeCandidates: candidateSet } : { ...ctx, episodeCandidates: null }

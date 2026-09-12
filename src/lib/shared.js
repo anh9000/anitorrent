@@ -434,47 +434,144 @@ const offsetCache = new Map()
 // The chain is followed past the arc boundary too (into the 366-episode 2004
 // series), because different groups pick different roots. Every cumulative sum
 // becomes a candidate, so whichever convention a group used still matches.
-async function fetchPrequelChain (anilistId) {
-  const seen = new Set()
-  const counts = []
-  let nextAiring = null
-  let current = Number(anilistId)
-  for (let depth = 0; depth < 12 && current && !seen.has(current); depth++) {
-    seen.add(current)
-    const body = JSON.stringify({
-      query: 'query($id:Int){Media(id:$id){episodes format status nextAiringEpisode{episode} relations{edges{relationType node{id episodes format title{romaji english}}}}}}',
-      variables: { id: current }
-    })
-    let media
+const RELATION_NODE = 'id episodes format title{romaji english}'
+
+function nestedRelations (depth) {
+  let inner = RELATION_NODE
+  for (let i = 0; i < depth; i++) {
+    inner = RELATION_NODE + ' relations{edges{relationType node{' + inner + '}}}'
+  }
+  return inner
+}
+
+const CHAIN_QUERY = 'query($id:Int){Media(id:$id){episodes status nextAiringEpisode{episode} relations{edges{relationType node{' + nestedRelations(2) + '}}}}}'
+const STEP_QUERY = 'query($id:Int){Media(id:$id){episodes format status nextAiringEpisode{episode} relations{edges{relationType node{' + RELATION_NODE + '}}}}}'
+
+// undefined means the lookup failed and must not be cached. null means AniList
+// answered but has no such entry. A 429 returns immediately: AniList sends no
+// Retry-After and its window is around a minute, so retrying inside one search
+// only spends more of the budget that is already exhausted.
+async function anilistQuery (query, id) {
+  const body = JSON.stringify({ query, variables: { id } })
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise(r => setTimeout(r, 600 * attempt + Math.floor(Math.random() * 300)))
+    let res
     try {
-      const res = await fetch(ANILIST_API, {
+      res = await fetch(ANILIST_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body
       })
-      if (!res.ok) break
-      media = (await res.json())?.data?.Media
     } catch {
+      continue
+    }
+    if (res.status === 429) return undefined
+    if (!res.ok) continue
+    let parsed
+    try {
+      parsed = JSON.parse(await res.text())
+    } catch {
+      continue
+    }
+    if (parsed && parsed.errors && !parsed.data) return undefined
+    const media = parsed && parsed.data && parsed.data.Media
+    return media || null
+  }
+  return undefined
+}
+
+function pickPrequel (node) {
+  const edges = (node && node.relations && node.relations.edges) || []
+  return edges
+    .filter(e => e.relationType === 'PREQUEL')
+    .map(e => e.node)
+    .filter(n => n && (n.format === 'TV' || n.format === 'ONA' || n.format === 'TV_SHORT'))
+    .sort((a, b) => (b.episodes || 0) - (a.episodes || 0))[0]
+}
+
+function prequelEntry (node) {
+  return {
+    episodes: node.episodes,
+    tokens: buildTitleTokens([node.title && node.title.romaji, node.title && node.title.english].filter(Boolean))
+  }
+}
+
+function airingOf (media) {
+  if (media && media.status === 'RELEASING' && media.nextAiringEpisode) {
+    const n = Number(media.nextAiringEpisode.episode)
+    if (Number.isInteger(n) && n > 0) return n
+  }
+  return null
+}
+
+// Asking hop by hop cost six requests per show per source, and Hayase runs five
+// sources at once, so one search spent about thirty of AniList's per-minute
+// budget and routinely hit its rate limit. A nested request covers the first
+// few hops at once. AniList stops filling in relations past roughly two levels,
+// so a chain longer than that continues hop by hop from where it ran out.
+async function fetchPrequelChain (anilistId) {
+  const root = await anilistQuery(CHAIN_QUERY, Number(anilistId))
+  if (root === undefined) return walkFrom(Number(anilistId), [], null, new Set())
+  if (!root) return { counts: [], nextAiring: null, ok: true }
+
+  const nextAiring = airingOf(root)
+  const counts = []
+  const seen = new Set([Number(anilistId)])
+  let node = root
+  let lastId = Number(anilistId)
+  while (counts.length < 12) {
+    const prequel = pickPrequel(node)
+    if (!prequel || !prequel.episodes || seen.has(prequel.id)) break
+    counts.push(prequelEntry(prequel))
+    seen.add(prequel.id)
+    lastId = prequel.id
+    if (prequel.relations === undefined) break
+    node = prequel
+  }
+  if (!counts.length) return { counts, nextAiring, ok: true }
+  const rest = await walkFrom(lastId, counts, nextAiring, seen)
+  return rest
+}
+
+async function walkFrom (startId, counts, nextAiring, seen) {
+  let ok = true
+  let current = startId
+  for (let depth = 0; depth < 12 && current; depth++) {
+    const media = await anilistQuery(STEP_QUERY, current)
+    if (media === undefined) {
+      ok = false
       break
     }
     if (!media) break
-    if (depth === 0 && media.status === 'RELEASING' && media.nextAiringEpisode) {
-      const n = Number(media.nextAiringEpisode.episode)
-      if (Number.isInteger(n) && n > 0) nextAiring = n
-    }
-    const prequel = (media.relations?.edges || [])
-      .filter(e => e.relationType === 'PREQUEL')
-      .map(e => e.node)
-      .filter(n => n && (n.format === 'TV' || n.format === 'ONA' || n.format === 'TV_SHORT'))
-      .sort((a, b) => (b.episodes || 0) - (a.episodes || 0))[0]
-    if (!prequel || !prequel.episodes) break
-    counts.push({
-      episodes: prequel.episodes,
-      tokens: buildTitleTokens([prequel.title?.romaji, prequel.title?.english].filter(Boolean))
-    })
+    if (depth === 0 && nextAiring == null) nextAiring = airingOf(media)
+    const prequel = pickPrequel(media)
+    if (!prequel || !prequel.episodes || seen.has(prequel.id)) break
+    counts.push(prequelEntry(prequel))
+    seen.add(prequel.id)
     current = prequel.id
   }
-  return { counts, nextAiring }
+  return { counts, nextAiring, ok }
+}
+
+// A lookup that failed is never kept. Caching it disabled the airing check and
+// the offset resolution for the rest of the session, which put a previous
+// cour's episode 9 in the picker for an episode that has not aired.
+async function getChain (anilistId) {
+  const key = String(anilistId)
+  if (!offsetCache.has(key)) {
+    offsetCache.set(key, fetchPrequelChain(anilistId).catch(() => ({ counts: [], nextAiring: null, ok: false })))
+  }
+  let chain
+  try {
+    chain = await offsetCache.get(key)
+  } catch {
+    chain = null
+  }
+  if (!chain || chain.ok === false) {
+    offsetCache.delete(key)
+    return { counts: [], nextAiring: null, ok: false }
+  }
+  return chain
 }
 
 function sharesSubSeries (showTokens, prequelTokens) {
@@ -490,11 +587,7 @@ function sharesSubSeries (showTokens, prequelTokens) {
 export async function episodeNotAired (query) {
   const ep = Number(query.episode)
   if (!Number.isInteger(ep) || !query.anilistId) return false
-  const key = String(query.anilistId)
-  if (!offsetCache.has(key)) {
-    offsetCache.set(key, fetchPrequelChain(query.anilistId).catch(() => ({ counts: [], nextAiring: null })))
-  }
-  const chain = await offsetCache.get(key)
+  const chain = await getChain(query.anilistId)
   const next = chain && chain.nextAiring
   return Number.isInteger(next) && ep >= next
 }
@@ -502,11 +595,7 @@ export async function episodeNotAired (query) {
 export async function resolveEpisodeCandidates (query) {
   const ep = Number(query.episode)
   if (!Number.isInteger(ep) || !query.anilistId) return null
-  const key = String(query.anilistId)
-  if (!offsetCache.has(key)) {
-    offsetCache.set(key, fetchPrequelChain(query.anilistId).catch(() => ({ counts: [], nextAiring: null })))
-  }
-  const chain = await offsetCache.get(key)
+  const chain = await getChain(query.anilistId)
   const candidates = new Set([ep])
   const showTokens = buildTitleTokens(query.titles || [])
   let running = 0

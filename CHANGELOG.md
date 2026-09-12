@@ -4,6 +4,26 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.21] - 2026-09-12 (stable)
+
+Per-source bumps: `nyaa 1.0.33`, `animetosho 1.0.26`, `subsplease 1.0.24`, `yameii 1.0.30`, `toonshub 1.0.27`. Seadex unchanged.
+
+### Fixed
+
+- **One failed AniList lookup disabled the unaired-episode check for the rest of the session.** The prequel lookup result was cached whether or not it succeeded, so a single rate-limited response left the show with no airing data and no absolute numbering until Hayase was restarted. That is why BLEACH: The Calamity episode 9, which does not air until 19 October, filled the picker with episode 9 of two earlier cours. A failed lookup is no longer cached, so the next search retries it, and the request itself now retries a few times before giving up.
+
+- **The cause of those rate-limited responses.** Walking the prequel chain asked AniList one request per step, and Hayase runs five sources at once, so a single search spent about thirty requests against a budget of ninety per minute. A nested request now covers the first hops at once, and the walk continues step by step only where AniList stops filling in deeper relations. Roughly a third fewer requests per show, and a rate limit no longer leaves the show in a broken state.
+
+- **SubsPlease reported an error on every search.** Its search endpoint now answers HTTP 200 with an empty body for every term, which is a change on their side, and an empty body made the JSON parse throw. An empty body is treated as no results instead of an error. The source also falls back to the latest feed, which still works, and filters it locally, so it keeps finding currently airing shows while its search endpoint is broken.
+
+### Verified
+
+- BLEACH: The Calamity episode 9 returns 0 results from all five sources with no errors, while episode 1 still returns its releases. Re:Zero season 4 episode 12, aired on a running show, unaffected. Frieren, SPY x FAMILY and Dandadan, all finished, unaffected. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures.
+
+### Known limitation
+
+- While the SubsPlease search endpoint stays broken, that source can only see what is in its latest feed, which holds the most recent releases. An older episode of an airing show is out of its reach until they fix the endpoint. The other four sources are unaffected.
+
 ## [1.6.20] - 2026-08-26 (stable)
 
 Per-source bumps: `nyaa 1.0.32`, `animetosho 1.0.25`, `subsplease 1.0.23`, `yameii 1.0.29`, `toonshub 1.0.26`. Seadex unchanged.
