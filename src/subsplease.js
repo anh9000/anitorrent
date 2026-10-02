@@ -135,7 +135,6 @@ function episodeMatchesAny (entry, query) {
 
 async function runSearch (query, mode) {
   if (!query || !query.titles || !query.titles.length) return []
-  if (query.notAired) return []
 
   const ctx = searchContext(query, mode)
   const seenHashes = new Set()

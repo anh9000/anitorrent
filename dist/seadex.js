@@ -19,6 +19,7 @@ function nestedRelations(depth) {
 var CHAIN_QUERY = "query($id:Int){Media(id:$id){episodes status nextAiringEpisode{episode} relations{edges{relationType node{" + nestedRelations(2) + "}}}}}";
 var STEP_QUERY = "query($id:Int){Media(id:$id){episodes format status nextAiringEpisode{episode} relations{edges{relationType node{" + RELATION_NODE + "}}}}}";
 var CANDIDATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1e3;
+var JUST_RELEASED_MS = 7 * 24 * 60 * 60 * 1e3;
 function buildMagnet(hash, name) {
   const trackers = TRACKERS.map((t) => "tr=" + encodeURIComponent(t)).join("&");
   const dn = name ? "&dn=" + encodeURIComponent(name) : "";

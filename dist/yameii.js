@@ -146,10 +146,17 @@ function stripLangCodes(title) {
 }
 function showNamePart(title) {
   let t = String(title || "").replace(/^\s*[[(\u3010][^\])\u3011]*[\])\u3011]\s*/, "");
-  const m = t.match(/^(.*?)(?=(?:[\s._][-~]\s*\d{1,4}(?:v\d)?(?:[\s[(]|$))|(?:\s*\bS\d{1,2}E\d{1,4}\b)|(?:\s*\bEP\s*\d{1,4}\b))(?![\s\S]*(?:[\s._][-~]\s*\d{1,4}(?:v\d)?(?:[\s[(]|$)|\s*\bS\d{1,2}E\d{1,4}\b|\s*\bEP\s*\d{1,4}\b))/i);
-  if (m && m[1].trim()) return m[1].trim();
-  const simple = t.split(/[[(]/)[0];
-  return (simple || t).trim();
+  const se = t.search(/\bS\d{1,2}E\d{1,4}\b/i);
+  if (se > 0) t = t.slice(0, se);
+  const dash = /[\s._][-~]\s*\d{1,4}(?:v\d)?(?=[\s[(]|$)/gi;
+  let last = -1;
+  let m;
+  while ((m = dash.exec(t)) !== null) last = m.index;
+  if (last > 0) t = t.slice(0, last);
+  const epWord = t.search(/\bEP\.?\s*\d{1,4}\b/i);
+  if (epWord > 0) t = t.slice(0, epWord);
+  t = t.split(/[[(]/)[0];
+  return t.trim().replace(/[\s:_-]+$/, "");
 }
 function nameIntroducesForeignWord(title, tokens) {
   for (const tok of significantTokens(showNamePart(title))) {
@@ -218,8 +225,9 @@ function seasonMarkerTokens(titles) {
   }
   return marks;
 }
-function resultMatchesSeason(title, showSeason, markerTokens) {
+function resultMatchesSeason(title, showSeason, markerTokens, chainSeason) {
   const rs = detectResultSeason(title);
+  if (chainSeason && chainSeason > 1 && rs === chainSeason) return true;
   if (showSeason > 1) {
     if (rs === showSeason) return true;
     if (rs != null) return false;
@@ -400,7 +408,7 @@ function prequelEntry(node) {
   };
 }
 function airingOf(media) {
-  if (media && media.status === "RELEASING" && media.nextAiringEpisode) {
+  if (media && media.nextAiringEpisode) {
     const n = Number(media.nextAiringEpisode.episode);
     if (Number.isInteger(n) && n > 0) return n;
   }
@@ -504,6 +512,8 @@ function searchContext(query, mode) {
   return {
     mode,
     showTokens: buildTitleTokens(titles),
+    notAired: !!query.notAired,
+    chainSeason: query.chainSeason || null,
     showSeason: detectShowSeason(titles),
     seasonMarks: seasonMarkerTokens(titles),
     showYears: detectShowYears(titles),
@@ -628,16 +638,27 @@ function hasConflictingEpisode(title, wanted) {
   }
   return true;
 }
+var JUST_RELEASED_MS = 7 * 24 * 60 * 60 * 1e3;
 function finalize(results, ctx, limit = 30) {
   const resolution = typeof ctx === "string" ? ctx : ctx && ctx.resolution || "";
   const hasExact = results.some((r) => r._tier === "A");
   let kept;
+  if (ctx && typeof ctx !== "string" && ctx.notAired) {
+    const now = Date.now();
+    const fresh = results.filter((r) => {
+      if (r._tier !== "A") return false;
+      const t = r.date && typeof r.date.getTime === "function" ? r.date.getTime() : 0;
+      return Number.isFinite(t) && now - t <= JUST_RELEASED_MS;
+    });
+    if (!fresh.length) return [];
+    return sortResults(fresh, resolution).slice(0, limit).map(stripInternal);
+  }
   if (hasExact) {
     kept = results.filter((r) => r._tier !== "C");
   } else {
     const wanted = typeof ctx === "string" ? null : wantedEpisodes(ctx);
     const showSeason = typeof ctx === "string" || ctx && ctx.offsetResolved ? null : ctx.showSeason;
-    kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).filter((r) => resultMatchesSeason(r.title, showSeason, typeof ctx === "string" ? null : ctx.seasonMarks)).map((r) => ({ ...r, accuracy: "low" }));
+    kept = results.filter((r) => !hasConflictingEpisode(r.title, wanted)).filter((r) => resultMatchesSeason(r.title, showSeason, typeof ctx === "string" ? null : ctx.seasonMarks, typeof ctx === "string" ? null : ctx.chainSeason)).map((r) => ({ ...r, accuracy: "low" }));
   }
   return sortResults(kept, resolution).slice(0, limit).map(stripInternal);
 }
@@ -657,7 +678,11 @@ async function withEpisodeCandidates(query) {
   try {
     const episodeCandidates = await resolveEpisodeCandidates(query);
     const notAired = await episodeNotAired(query);
-    const out = notAired ? { ...query, notAired: true } : query;
+    const chain = await getChain(query.anilistId);
+    const chainSeason = chain && chain.ok && chain.counts.length ? chain.counts.length + 1 : null;
+    let out = query;
+    if (notAired) out = { ...out, notAired: true };
+    if (chainSeason) out = { ...out, chainSeason };
     if (!episodeCandidates || episodeCandidates.size <= 1) return out;
     return { ...out, episodeCandidates };
   } catch {
@@ -762,8 +787,12 @@ function classifyResult(title, opts) {
   const minHits = opts.minHits != null ? opts.minHits : showTokens && showTokens.size >= 3 ? 2 : 1;
   if (!resultMatchesShow(title, showTokens, minHits)) return null;
   if (showTokens && showTokens.size === 1 && nameIntroducesForeignWord(title, showTokens)) return null;
+  const marks = opts.seasonMarks;
+  if (marks && marks.size && !resultMatchesShow(title, marks, 1) && nameIntroducesForeignWord(title, showTokens)) {
+    return null;
+  }
   const offset = usesOffsetEpisode(opts);
-  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason, opts.seasonMarks);
+  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason, opts.seasonMarks, opts.chainSeason);
   const yearOk = resultMatchesYear(title, opts.showYears);
   const isBatch = looksLikeBatch(title);
   if (opts.mode === "batch") {
@@ -929,7 +958,6 @@ function itemToResult(raw, opts) {
 }
 async function runSearch(query, opts) {
   if (!query.titles || !query.titles.length) return [];
-  if (query.notAired) return [];
   const mode = opts.batch ? "batch" : opts.movie ? "movie" : "single";
   const ctx = searchContext(query, mode);
   const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode, anilistId: query.anilistId, episodeCandidates: query.episodeCandidates });

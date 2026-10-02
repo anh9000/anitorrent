@@ -4,6 +4,26 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.22] - 2026-10-02 (stable)
+
+Per-source bumps: `nyaa 1.0.34`, `animetosho 1.0.27`, `subsplease 1.0.25`, `yameii 1.0.31`, `toonshub 1.0.28`. Seadex unchanged.
+
+A new season premiering exposed four problems at once, all of them on the day it matters most.
+
+### Fixed
+
+- **A season that had not premiered yet was never checked.** The unaired-episode check only ran for a show AniList calls RELEASING, and a show whose first episode is still to come is NOT_YET_RELEASED. So on premiere day the check was inert, and Tokyo Revengers season 4 episode 1 returned episode 1 of the two earlier arcs instead.
+
+- **The schedule now decides the fallback, not the search.** AniList's airing time is the broadcast slot and release groups beat it: season 4 episode 1 was on nyaa more than an hour before AniList called it aired, and the extension answered with nothing. A freshly uploaded exact match is believed over the schedule now. A years-old file that happens to carry the same episode number, which is the whole reason the check exists, still cannot get through.
+
+- **An arc-titled sequel could not tell itself apart from its own earlier arcs.** The show states no season number, so the detector assumed season 1 and every release correctly labelled S04 was discarded, while the earlier Tenjiku-hen and Seiya Kessen-hen arcs passed as exact matches. The season number is now taken from the length of the prequel chain when the titles do not state one, and only ever to accept a release, never to reject one. On top of that, a result naming a different arc than the show's own is rejected: an entry whose titles carry `Santen Sensou-hen` no longer matches a file named `Tenjiku-hen`.
+
+- **The show name was not being cut out of a filename correctly.** Release metadata after an `S04E01` marker was being read as part of the title, so words like `DSNP`, `WEB-DL` and `AAC` counted against the show and dropped four of the six genuine season 4 releases. The name is now cut at the episode marker in every common filename shape.
+
+### Verified
+
+- Tokyo Revengers season 4 episode 1 returns 7 results on nyaa and 3 on ToonsHub, all of them S04E01 uploaded within hours, with no earlier arc present. Episode 2, which is genuinely not out, returns nothing. BLEACH: The Calamity episode 9, not out and with two earlier cours carrying an episode 9, still returns nothing. Tokyo Revengers season 1, Re:Zero season 4, Kimetsu no Yaiba Yuukaku-hen, Frieren, Mushoku Tensei and Made in Abyss all unaffected, with 0 off-show results anywhere. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures.
+
 ## [1.6.21] - 2026-09-12 (stable)
 
 Per-source bumps: `nyaa 1.0.33`, `animetosho 1.0.26`, `subsplease 1.0.24`, `yameii 1.0.30`, `toonshub 1.0.27`. Seadex unchanged.

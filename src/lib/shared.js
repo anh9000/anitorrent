@@ -127,10 +127,17 @@ export function stripLangCodes (title) {
 // an arc subtitle stays in ("Made in Abyss - Retsujitsu no Ougonkyou - 04").
 export function showNamePart (title) {
   let t = String(title || '').replace(/^\s*[[(\u3010][^\])\u3011]*[\])\u3011]\s*/, '')
-  const m = t.match(/^(.*?)(?=(?:[\s._][-~]\s*\d{1,4}(?:v\d)?(?:[\s[(]|$))|(?:\s*\bS\d{1,2}E\d{1,4}\b)|(?:\s*\bEP\s*\d{1,4}\b))(?![\s\S]*(?:[\s._][-~]\s*\d{1,4}(?:v\d)?(?:[\s[(]|$)|\s*\bS\d{1,2}E\d{1,4}\b|\s*\bEP\s*\d{1,4}\b))/i)
-  if (m && m[1].trim()) return m[1].trim()
-  const simple = t.split(/[[(]/)[0]
-  return (simple || t).trim()
+  const se = t.search(/\bS\d{1,2}E\d{1,4}\b/i)
+  if (se > 0) t = t.slice(0, se)
+  const dash = /[\s._][-~]\s*\d{1,4}(?:v\d)?(?=[\s[(]|$)/gi
+  let last = -1
+  let m
+  while ((m = dash.exec(t)) !== null) last = m.index
+  if (last > 0) t = t.slice(0, last)
+  const epWord = t.search(/\bEP\.?\s*\d{1,4}\b/i)
+  if (epWord > 0) t = t.slice(0, epWord)
+  t = t.split(/[[(]/)[0]
+  return t.trim().replace(/[\s:_-]+$/, '')
 }
 
 // A show whose whole identity is one word is trivially satisfied by any release
@@ -242,8 +249,14 @@ export function seasonMarkerTokens (titles) {
   return marks
 }
 
-export function resultMatchesSeason (title, showSeason, markerTokens) {
+// chainSeason comes from counting the show's prequels and is only ever used to
+// accept, never to reject. An arc-titled sequel states no number of its own, so
+// the detector falls back to season 1 and threw away the releases that label it
+// correctly: Tokyo Revengers: Santen Sensou-hen is the fourth season and every
+// group tagged it S04.
+export function resultMatchesSeason (title, showSeason, markerTokens, chainSeason) {
   const rs = detectResultSeason(title)
+  if (chainSeason && chainSeason > 1 && rs === chainSeason) return true
   if (showSeason > 1) {
     if (rs === showSeason) return true
     if (rs != null) return false
@@ -496,8 +509,12 @@ function prequelEntry (node) {
   }
 }
 
+// AniList gives a next episode for a show that is running and for one that has
+// not premiered yet. Requiring RELEASING skipped the second case, which is
+// exactly premiere day: episode 1 of a new season is not out, and the feeds
+// still carry episode 1 of every earlier season under the same franchise name.
 function airingOf (media) {
-  if (media && media.status === 'RELEASING' && media.nextAiringEpisode) {
+  if (media && media.nextAiringEpisode) {
     const n = Number(media.nextAiringEpisode.episode)
     if (Number.isInteger(n) && n > 0) return n
   }
@@ -630,6 +647,8 @@ export function searchContext (query, mode) {
   return {
     mode,
     showTokens: buildTitleTokens(titles),
+    notAired: !!query.notAired,
+    chainSeason: query.chainSeason || null,
     showSeason: detectShowSeason(titles),
     seasonMarks: seasonMarkerTokens(titles),
     showYears: detectShowYears(titles),
@@ -797,10 +816,28 @@ export function hasConflictingEpisode (title, wanted) {
 // merged picker. Guesses that name a different episode outright are dropped
 // outright. Ones with no episode in the name (packs, movies, unlabelled rips)
 // stay, which is what keeps the picker from going empty.
+const JUST_RELEASED_MS = 7 * 24 * 60 * 60 * 1000
+
 export function finalize (results, ctx, limit = 30) {
   const resolution = typeof ctx === 'string' ? ctx : (ctx && ctx.resolution) || ''
   const hasExact = results.some(r => r._tier === 'A')
   let kept
+  // AniList's schedule is the broadcast time, and release groups beat it: on
+  // premiere day Tokyo Revengers season 4 was on nyaa over an hour before
+  // AniList called it aired. So the schedule only decides what happens when
+  // nothing real turned up. A freshly uploaded exact match is believed over
+  // it, while a years-old file that happens to carry the same episode number,
+  // which is the whole reason the check exists, still cannot get through.
+  if (ctx && typeof ctx !== 'string' && ctx.notAired) {
+    const now = Date.now()
+    const fresh = results.filter(r => {
+      if (r._tier !== 'A') return false
+      const t = r.date && typeof r.date.getTime === 'function' ? r.date.getTime() : 0
+      return Number.isFinite(t) && now - t <= JUST_RELEASED_MS
+    })
+    if (!fresh.length) return []
+    return sortResults(fresh, resolution).slice(0, limit).map(stripInternal)
+  }
   if (hasExact) {
     kept = results.filter(r => r._tier !== 'C')
   } else {
@@ -812,7 +849,7 @@ export function finalize (results, ctx, limit = 30) {
       // is the same kind of mismatch: asking for season 4 was turning up a dub
       // sitting on S03E12 and season 1 to 3 Bluray packs. Titles that name no
       // season still pass.
-      .filter(r => resultMatchesSeason(r.title, showSeason, typeof ctx === 'string' ? null : ctx.seasonMarks))
+      .filter(r => resultMatchesSeason(r.title, showSeason, typeof ctx === 'string' ? null : ctx.seasonMarks, typeof ctx === 'string' ? null : ctx.chainSeason))
       .map(r => ({ ...r, accuracy: 'low' }))
   }
   return sortResults(kept, resolution).slice(0, limit).map(stripInternal)
@@ -839,7 +876,11 @@ export async function withEpisodeCandidates (query) {
   try {
     const episodeCandidates = await resolveEpisodeCandidates(query)
     const notAired = await episodeNotAired(query)
-    const out = notAired ? { ...query, notAired: true } : query
+    const chain = await getChain(query.anilistId)
+    const chainSeason = chain && chain.ok && chain.counts.length ? chain.counts.length + 1 : null
+    let out = query
+    if (notAired) out = { ...out, notAired: true }
+    if (chainSeason) out = { ...out, chainSeason }
     if (!episodeCandidates || episodeCandidates.size <= 1) return out
     return { ...out, episodeCandidates }
   } catch {
@@ -968,8 +1009,12 @@ export function classifyResult (title, opts) {
   const minHits = opts.minHits != null ? opts.minHits : (showTokens && showTokens.size >= 3 ? 2 : 1)
   if (!resultMatchesShow(title, showTokens, minHits)) return null
   if (showTokens && showTokens.size === 1 && nameIntroducesForeignWord(title, showTokens)) return null
+  const marks = opts.seasonMarks
+  if (marks && marks.size && !resultMatchesShow(title, marks, 1) && nameIntroducesForeignWord(title, showTokens)) {
+    return null
+  }
   const offset = usesOffsetEpisode(opts)
-  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason, opts.seasonMarks)
+  const seasonOk = offset || resultMatchesSeason(title, opts.showSeason, opts.seasonMarks, opts.chainSeason)
   const yearOk = resultMatchesYear(title, opts.showYears)
   const isBatch = looksLikeBatch(title)
   if (opts.mode === 'batch') {
