@@ -4,6 +4,18 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.23] - 2026-10-17 (stable)
+
+Per-source bumps: `nyaa 1.0.35`, `animetosho 1.0.28`, `subsplease 1.0.26`, `yameii 1.0.32`, `toonshub 1.0.29`. Seadex unchanged.
+
+### Fixed
+
+- **A year in the AniList title hid every release that does not carry that year.** AniList names newer shows with a year to tell them apart, as in `False Memory (2026)`. The year went into the search query, and nyaa requires every word to match, so only uploads with `2026` in their name came back. ToonsHub, which names the same show `False Memory S01E01`, never appeared, and it had the most seeders. A trailing year is now dropped from the query. It is still used as a filter, so a file dated to a different year is still rejected. On nyaa, `false memory 2026` returned 14 items without ToonsHub and `false memory` returns 65 with it. Episode 1 now lists ToonsHub first (70 seeders), then SubsWhen and Gecko. The same fix covers Hunter x Hunter (2011) and Fruits Basket (2019).
+
+### Verified
+
+- False Memory episodes 1 and 3, Tokyo Revengers season 4 episode 2 and Frieren season 1 episode 8 all return results. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures.
+
 ## [1.6.22] - 2026-10-02 (stable)
 
 Per-source bumps: `nyaa 1.0.34`, `animetosho 1.0.27`, `subsplease 1.0.25`, `yameii 1.0.31`, `toonshub 1.0.28`. Seadex unchanged.

@@ -901,7 +901,9 @@ export const GENERIC_QUERY_WORDS = new Set([
 ])
 
 export function trimTitleForQuery (title) {
-  const raw = String(title || '')
+  const original = String(title || '')
+  const stripped = original.replace(/\s*[(\[]\s*(?:19|20)\d{2}\s*[)\]]\s*$/, '').trim()
+  const raw = stripped || original
   const colon = raw.indexOf(':')
   const base = colon > 0 ? raw.slice(0, colon) : raw
   const fromBase = significantTokens(base).slice(0, 4).join(' ')
