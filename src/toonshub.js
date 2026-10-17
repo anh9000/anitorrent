@@ -1,7 +1,7 @@
 import {
   looksLikeBatch, hitsExclusion, buildMagnet, parseSize, pickTag, pickItems,
   httpGet, checkNyaaFeed, buildQueries, searchContext, finalize, collectFeed,
-  withEpisodeCandidates
+  withEpisodeCandidates, withShowFacts
 } from './lib/shared.js'
 
 const SOURCE_DEFAULT = 'high'
@@ -111,7 +111,7 @@ async function runSearch (query, opts) {
 
 export default new class ToonsHub {
   async single (query) {
-    if (query.episodeCount === 1) return runSearch(query, { movie: true })
+    if (query.episodeCount === 1) return runSearch(await withShowFacts(query), { movie: true })
     return runSearch(await withEpisodeCandidates(query), { episode: query.episode })
   }
 

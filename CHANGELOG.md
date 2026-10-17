@@ -4,6 +4,18 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.24] - 2026-10-17 (stable)
+
+Per-source bumps: `nyaa 1.0.36`, `animetosho 1.0.29`, `subsplease 1.0.27`, `yameii 1.0.33`, `toonshub 1.0.30`. Seadex unchanged.
+
+### Fixed
+
+- **A one-episode work listed the later series that shares its name.** False Memory exists on AniList twice: a 2020 one-episode short and a 2026 seven-episode series. Only the series carries a year in its title. The short searched plain `false memory` and got the series, so its picker showed episodes 5 to 7 and the series batch instead of its own releases. For a one-episode work the extension now takes the start year from AniList, with a year of slack either side, and filters on it, so a file dated 2026 is rejected for the 2020 short. It also rejects, for such a work, any file that names a season, a range of episodes or an episode above 1, since a one-episode work has none of those. The short now lists its own `(2020)` releases first. Your Name, Vampire Hunter D: Bloodlust and Spirited Away are unaffected.
+
+### Known limitation
+
+- A series file named only `- 01`, with no year and no season, cannot be told apart from a one-episode work by its name. It still appears for the short, ranked below the correct releases.
+
 ## [1.6.23] - 2026-10-17 (stable)
 
 Per-source bumps: `nyaa 1.0.35`, `animetosho 1.0.28`, `subsplease 1.0.26`, `yameii 1.0.32`, `toonshub 1.0.29`. Seadex unchanged.

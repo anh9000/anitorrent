@@ -1,6 +1,6 @@
 import {
   looksLikeBatch, hitsExclusion, buildQueries, searchContext,
-  shapeAll, finalize, withEpisodeCandidates
+  shapeAll, finalize, withEpisodeCandidates, withShowFacts
 } from './lib/shared.js'
 
 const SOURCE_DEFAULT = 'high'
@@ -160,7 +160,7 @@ async function search (query, mode) {
 
 export default new class AnimeTosho {
   async single (query) {
-    if (query.episodeCount === 1) return search(query, 'movie')
+    if (query.episodeCount === 1) return search(await withShowFacts(query), 'movie')
     return search(await withEpisodeCandidates(query), 'single')
   }
   async batch (query) { return search(query, 'batch') }

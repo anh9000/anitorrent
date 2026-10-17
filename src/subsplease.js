@@ -1,6 +1,6 @@
 import {
   hitsExclusion, buildQueries, searchContext, classifyResult,
-  tagAccuracy, finalize, withEpisodeCandidates
+  tagAccuracy, finalize, withEpisodeCandidates, withShowFacts
 } from './lib/shared.js'
 
 const SOURCE_DEFAULT = 'high'
@@ -219,7 +219,7 @@ async function runSearch (query, mode) {
 
 export default new class SubsPlease {
   async single (query) {
-    if (query.episodeCount === 1) return runSearch(query, 'movie')
+    if (query.episodeCount === 1) return runSearch(await withShowFacts(query), 'movie')
     return runSearch(await withEpisodeCandidates(query), 'single')
   }
   async batch (query) { return runSearch(query, 'batch') }

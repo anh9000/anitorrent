@@ -281,7 +281,7 @@ function nestedRelations(depth) {
   }
   return inner;
 }
-var CHAIN_QUERY = "query($id:Int){Media(id:$id){episodes status nextAiringEpisode{episode} relations{edges{relationType node{" + nestedRelations(2) + "}}}}}";
+var CHAIN_QUERY = "query($id:Int){Media(id:$id){episodes status startDate{year} nextAiringEpisode{episode} relations{edges{relationType node{" + nestedRelations(2) + "}}}}}";
 var STEP_QUERY = "query($id:Int){Media(id:$id){episodes format status nextAiringEpisode{episode} relations{edges{relationType node{" + RELATION_NODE + "}}}}}";
 async function anilistQuery(query, id) {
   const body = JSON.stringify({ query, variables: { id } });
@@ -332,6 +332,7 @@ async function fetchPrequelChain(anilistId) {
   const root = await anilistQuery(CHAIN_QUERY, Number(anilistId));
   if (root === void 0) return walkFrom(Number(anilistId), [], null, /* @__PURE__ */ new Set());
   if (!root) return { counts: [], nextAiring: null, ok: true };
+  const startYear = root.startDate && Number.isInteger(root.startDate.year) ? root.startDate.year : null;
   const nextAiring = airingOf(root);
   const counts = [];
   const seen = /* @__PURE__ */ new Set([Number(anilistId)]);
@@ -346,8 +347,9 @@ async function fetchPrequelChain(anilistId) {
     if (prequel.relations === void 0) break;
     node = prequel;
   }
-  if (!counts.length) return { counts, nextAiring, ok: true };
+  if (!counts.length) return { counts, nextAiring, ok: true, startYear };
   const rest = await walkFrom(lastId, counts, nextAiring, seen);
+  rest.startYear = startYear;
   return rest;
 }
 async function walkFrom(startId, counts, nextAiring, seen) {
@@ -419,6 +421,20 @@ async function resolveEpisodeCandidates(query) {
   if (running >= 10) candidates.add(ep + running);
   return candidates;
 }
+function yearsForShow(titles, startYear, mode) {
+  const years = detectShowYears(titles);
+  if (years.size || mode !== "movie" || !Number.isInteger(startYear)) return years;
+  return /* @__PURE__ */ new Set([String(startYear - 1), String(startYear), String(startYear + 1)]);
+}
+async function withShowFacts(query) {
+  try {
+    if (!query || !query.anilistId) return query;
+    const chain = await getChain(query.anilistId);
+    if (chain && chain.ok && Number.isInteger(chain.startYear)) return { ...query, startYear: chain.startYear };
+  } catch {
+  }
+  return query;
+}
 function searchContext(query, mode) {
   const titles = query.titles || [];
   const primary = rankTitlesForQuery(titles)[0];
@@ -430,7 +446,7 @@ function searchContext(query, mode) {
     chainSeason: query.chainSeason || null,
     showSeason: detectShowSeason(titles),
     seasonMarks: seasonMarkerTokens(titles),
-    showYears: detectShowYears(titles),
+    showYears: yearsForShow(titles, query.startYear, mode),
     minHits: primaryTokens.size >= 3 ? 2 : 1,
     episode: query.episode,
     episodeCandidates: query.episodeCandidates || null,
@@ -545,6 +561,7 @@ async function withEpisodeCandidates(query) {
     let out = query;
     if (notAired) out = { ...out, notAired: true };
     if (chainSeason) out = { ...out, chainSeason };
+    if (chain && chain.ok && Number.isInteger(chain.startYear)) out = { ...out, startYear: chain.startYear };
     if (!episodeCandidates || episodeCandidates.size <= 1) return out;
     return { ...out, episodeCandidates };
   } catch {
@@ -663,6 +680,9 @@ function classifyResult(title, opts) {
     return seasonOk && yearOk && isBatch ? "A" : "C";
   }
   if (opts.mode === "movie") {
+    const marker = String(title).match(/\bS(\d{1,2})(?:E\d{1,4}|\b)/i);
+    if (marker && parseInt(marker[1], 10) >= 1) return null;
+    if (titleEpisodeMarkers(title).some(([lo, hi]) => hi > lo || lo > 1)) return null;
     return seasonOk && yearOk ? "A" : "C";
   }
   const epOk = opts.episode == null || matchesAnyEpisode(title, opts);
@@ -882,7 +902,7 @@ async function runSearch(query, mode) {
 }
 var subsplease_default = new class SubsPlease {
   async single(query) {
-    if (query.episodeCount === 1) return runSearch(query, "movie");
+    if (query.episodeCount === 1) return runSearch(await withShowFacts(query), "movie");
     return runSearch(await withEpisodeCandidates(query), "single");
   }
   async batch(query) {

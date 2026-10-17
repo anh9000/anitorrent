@@ -457,7 +457,7 @@ function nestedRelations (depth) {
   return inner
 }
 
-const CHAIN_QUERY = 'query($id:Int){Media(id:$id){episodes status nextAiringEpisode{episode} relations{edges{relationType node{' + nestedRelations(2) + '}}}}}'
+const CHAIN_QUERY = 'query($id:Int){Media(id:$id){episodes status startDate{year} nextAiringEpisode{episode} relations{edges{relationType node{' + nestedRelations(2) + '}}}}}'
 const STEP_QUERY = 'query($id:Int){Media(id:$id){episodes format status nextAiringEpisode{episode} relations{edges{relationType node{' + RELATION_NODE + '}}}}}'
 
 // undefined means the lookup failed and must not be cached. null means AniList
@@ -530,6 +530,7 @@ async function fetchPrequelChain (anilistId) {
   const root = await anilistQuery(CHAIN_QUERY, Number(anilistId))
   if (root === undefined) return walkFrom(Number(anilistId), [], null, new Set())
   if (!root) return { counts: [], nextAiring: null, ok: true }
+  const startYear = root.startDate && Number.isInteger(root.startDate.year) ? root.startDate.year : null
 
   const nextAiring = airingOf(root)
   const counts = []
@@ -545,8 +546,9 @@ async function fetchPrequelChain (anilistId) {
     if (prequel.relations === undefined) break
     node = prequel
   }
-  if (!counts.length) return { counts, nextAiring, ok: true }
+  if (!counts.length) return { counts, nextAiring, ok: true, startYear }
   const rest = await walkFrom(lastId, counts, nextAiring, seen)
+  rest.startYear = startYear
   return rest
 }
 
@@ -636,6 +638,27 @@ export async function resolveEpisodeCandidates (query) {
   return candidates
 }
 
+// A one-episode work has nothing else to tell it apart from a later remake or
+// series of the same name, and AniList only puts a year in the title of the
+// newer entry. False Memory the 2020 short and False Memory the 2026 series
+// both search as "false memory", so the short was listing the series. The start
+// year from AniList stands in for the year the title does not state, with a
+// year of slack either side for a release dated across New Year.
+function yearsForShow (titles, startYear, mode) {
+  const years = detectShowYears(titles)
+  if (years.size || mode !== 'movie' || !Number.isInteger(startYear)) return years
+  return new Set([String(startYear - 1), String(startYear), String(startYear + 1)])
+}
+
+export async function withShowFacts (query) {
+  try {
+    if (!query || !query.anilistId) return query
+    const chain = await getChain(query.anilistId)
+    if (chain && chain.ok && Number.isInteger(chain.startYear)) return { ...query, startYear: chain.startYear }
+  } catch {}
+  return query
+}
+
 export function searchContext (query, mode) {
   const titles = query.titles || []
   // Threshold comes from the canonical title alone. Taking it from the union of
@@ -651,7 +674,7 @@ export function searchContext (query, mode) {
     chainSeason: query.chainSeason || null,
     showSeason: detectShowSeason(titles),
     seasonMarks: seasonMarkerTokens(titles),
-    showYears: detectShowYears(titles),
+    showYears: yearsForShow(titles, query.startYear, mode),
     minHits: primaryTokens.size >= 3 ? 2 : 1,
     episode: query.episode,
     episodeCandidates: query.episodeCandidates || null,
@@ -881,6 +904,7 @@ export async function withEpisodeCandidates (query) {
     let out = query
     if (notAired) out = { ...out, notAired: true }
     if (chainSeason) out = { ...out, chainSeason }
+    if (chain && chain.ok && Number.isInteger(chain.startYear)) out = { ...out, startYear: chain.startYear }
     if (!episodeCandidates || episodeCandidates.size <= 1) return out
     return { ...out, episodeCandidates }
   } catch {
@@ -1023,6 +1047,9 @@ export function classifyResult (title, opts) {
     return (seasonOk && yearOk && isBatch) ? 'A' : 'C'
   }
   if (opts.mode === 'movie') {
+    const marker = String(title).match(/\bS(\d{1,2})(?:E\d{1,4}|\b)/i)
+    if (marker && parseInt(marker[1], 10) >= 1) return null
+    if (titleEpisodeMarkers(title).some(([lo, hi]) => hi > lo || lo > 1)) return null
     return (seasonOk && yearOk) ? 'A' : 'C'
   }
   const epOk = opts.episode == null || matchesAnyEpisode(title, opts)

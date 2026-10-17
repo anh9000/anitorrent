@@ -1,7 +1,7 @@
 import {
   looksLikeBatch, hitsExclusion, buildMagnet, parseSize, pickTag, pickItems,
   httpGet, checkNyaaFeed, buildQueries, searchContext, finalize, collectFeed,
-  withEpisodeCandidates
+  withEpisodeCandidates, withShowFacts
 } from './lib/shared.js'
 
 const SOURCE_DEFAULT = 'medium'
@@ -111,7 +111,7 @@ export default new class Nyaa {
     // group filenames for these almost never carry an episode marker like "- 01"
     // or "S01E01", so applying titleHasEpisode() would filter out every real
     // release. Treat single() on a 1-episode entry as movie mode.
-    if (query.episodeCount === 1) return runSearch(query, { movie: true })
+    if (query.episodeCount === 1) return runSearch(await withShowFacts(query), { movie: true })
     return runSearch(await withEpisodeCandidates(query), { episode: query.episode })
   }
 
