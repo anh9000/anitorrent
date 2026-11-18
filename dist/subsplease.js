@@ -147,7 +147,7 @@ function detectResultSeason(title) {
   let dm;
   while ((dm = digitRE.exec(t)) !== null) {
     const before = t.slice(Math.max(0, dm.index - 8), dm.index).toLowerCase();
-    if (/\bpart\s+$/.test(before)) continue;
+    if (/\b(?:part|cour)\s+$/.test(before)) continue;
     if (/^-[A-Za-z]/.test(t.slice(dm.index + 1))) continue;
     return parseInt(dm[1], 10);
   }
@@ -156,7 +156,11 @@ function detectResultSeason(title) {
 function detectShowSeason(titles) {
   let max = 0;
   for (const t of titles || []) {
-    const n = detectResultSeason(t);
+    const str = String(t || "");
+    const letters = str.replace(/[^\p{L}]/gu, "");
+    const latin = str.replace(/[^A-Za-z]/g, "");
+    if (letters.length && latin.length / letters.length < 0.6) continue;
+    const n = detectResultSeason(str);
     if (n && n > max) max = n;
   }
   return max || 1;
@@ -443,6 +447,7 @@ function searchContext(query, mode) {
     mode,
     showTokens: buildTitleTokens(titles),
     notAired: !!query.notAired,
+    episodeCount: Number(query.episodeCount) || 0,
     chainSeason: query.chainSeason || null,
     showSeason: detectShowSeason(titles),
     seasonMarks: seasonMarkerTokens(titles),
@@ -557,7 +562,8 @@ async function withEpisodeCandidates(query) {
     const episodeCandidates = await resolveEpisodeCandidates(query);
     const notAired = await episodeNotAired(query);
     const chain = await getChain(query.anilistId);
-    const chainSeason = chain && chain.ok && chain.counts.length ? chain.counts.length + 1 : null;
+    const splitCour = (query.titles || []).some((t) => /\b(?:part|cour)\s*\d/i.test(String(t || "")));
+    const chainSeason = !splitCour && chain && chain.ok && chain.counts.length ? chain.counts.length + 1 : null;
     let out = query;
     if (notAired) out = { ...out, notAired: true };
     if (chainSeason) out = { ...out, chainSeason };
@@ -648,7 +654,9 @@ function pad(n) {
 }
 function usesOffsetEpisode(opts) {
   const c = opts && opts.episodeCandidates;
-  return !!(c && c.size === 1 && opts.episode != null && !c.has(opts.episode));
+  if (!(c && c.size === 1 && opts.episode != null && !c.has(opts.episode))) return false;
+  const n = [...c][0];
+  return !(opts.episodeCount > 0 && n <= opts.episodeCount);
 }
 function batchCoversEpisode(title, opts) {
   const wanted = [];

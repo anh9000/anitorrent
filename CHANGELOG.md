@@ -4,6 +4,22 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.25] - 2026-11-18 (stable)
+
+Per-source bumps: `nyaa 1.0.37`, `animetosho 1.0.30`, `subsplease 1.0.28`, `yameii 1.0.34`, `toonshub 1.0.31`. Seadex unchanged.
+
+### Fixed
+
+- **A foreign-script synonym could set the season of a show.** Mushoku Tensei: Jobless Reincarnation Cour 2 is season 1, but AniList lists a Thai synonym ending in the digit 2, and the detector read it as season 2. Season 3 releases such as `S03E12` and `S2 - 12` then passed as exact matches. Titles written mostly in a non-Latin script no longer take part in detecting the season. This affects any show with such a synonym.
+
+- **Cour N was read as a season number.** It is now treated like Part N, which already was not, and a show whose titles mention a part or cour no longer gets a season guessed from the length of its prequel chain, since a split season would be guessed one too high.
+
+- **Absolute episode numbers inside a normal season range skipped the season check.** Absolute episode 12 of a 12-episode cour is also episode 12 of every other season. The season check now stays on unless the absolute number is past the show's own episode count, which is when it can only mean the continuous numbering.
+
+### Verified
+
+- Mushoku Tensei season 1 cour 2 episodes 1 and 5 return no season 2 or season 3 file. Bleach: The Calamity and Re:Zero season 4 still return results. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures.
+
 ## [1.6.24] - 2026-10-17 (stable)
 
 Per-source bumps: `nyaa 1.0.36`, `animetosho 1.0.29`, `subsplease 1.0.27`, `yameii 1.0.33`, `toonshub 1.0.30`. Seadex unchanged.
