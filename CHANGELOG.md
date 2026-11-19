@@ -4,6 +4,20 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.26] - 2026-11-19 (stable)
+
+Per-source bumps: `nyaa 1.0.38`, `yameii 1.0.35`, `toonshub 1.0.32`. Others unchanged.
+
+### Fixed
+
+- **OVAs and specials with a long subtitle could not be found.** Mushoku Tensei: Cour 2 - Eris the Goblin Slayer is a one-episode special. Every one of its titles starts with the show name, so all of them reduced to the single query `mushoku tensei`, and nyaa's recent page only holds newer episodes of the series. For one-episode works a second query is now built from the franchise name plus the first two words of the subtitle, such as `mushoku tensei eris goblin`. The special went from 2 rows to 10, including the Erai-raws and Lia releases.
+
+- **Correct special releases were rejected by the one-episode rules.** Files such as `Mushoku Tensei - S00E01 ... (S01E17.5) (OVA 1)` name a season and an episode above 1 in their alternate titles. A file marked as S00, OVA, OAD, ONA or Special now skips those checks.
+
+### Verified
+
+- The Eris special lists its own Erai-raws, Fuchs, Fuechslein and Lia releases. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures.
+
 ## [1.6.25] - 2026-11-18 (stable)
 
 Per-source bumps: `nyaa 1.0.37`, `animetosho 1.0.30`, `subsplease 1.0.28`, `yameii 1.0.34`, `toonshub 1.0.31`. Seadex unchanged.

@@ -356,6 +356,20 @@ export function buildQueries (titles, opts = {}) {
   // 1100" finds nothing while "detective conan 1100" finds the episode. These
   // are a second phase, not extra work up front, since a feed's recent page
   // already holds the current episode of an airing show.
+  if (opts.subtitle && bases.length < limit) {
+    for (const title of rankTitlesForQuery(titles || [])) {
+      const parts = String(title).split(/\s+-\s+/)
+      if (parts.length < 2) continue
+      const sub = significantTokens(parts[parts.length - 1]).slice(0, 2)
+      const base = trimTitleForQuery(title)
+      if (sub.length < 2 || !base) continue
+      const q = base + ' ' + sub.join(' ')
+      if (seen.has(q)) continue
+      seen.add(q)
+      bases.push(q)
+      break
+    }
+  }
   const rescue = []
   for (const alias of aliasTitles(opts.anilistId)) {
     const a = String(alias).trim()
@@ -1055,9 +1069,12 @@ export function classifyResult (title, opts) {
     return (seasonOk && yearOk && isBatch) ? 'A' : 'C'
   }
   if (opts.mode === 'movie') {
-    const marker = String(title).match(/\bS(\d{1,2})(?:E\d{1,4}|\b)/i)
-    if (marker && parseInt(marker[1], 10) >= 1) return null
-    if (titleEpisodeMarkers(title).some(([lo, hi]) => hi > lo || lo > 1)) return null
+    const special = /\bS0{1,2}E\d|\b(?:OVA|OAD|ONA|Special|SP)\b/i.test(title)
+    if (!special) {
+      const marker = String(title).match(/\bS(\d{1,2})(?:E\d{1,4}|\b)/i)
+      if (marker && parseInt(marker[1], 10) >= 1) return null
+      if (titleEpisodeMarkers(title).some(([lo, hi]) => hi > lo || lo > 1)) return null
+    }
     return (seasonOk && yearOk) ? 'A' : 'C'
   }
   const epOk = opts.episode == null || matchesAnyEpisode(title, opts)

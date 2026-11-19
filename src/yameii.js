@@ -98,7 +98,7 @@ async function runSearch (query, opts) {
 
   const mode = opts.batch ? 'batch' : (opts.movie ? 'movie' : 'single')
   const ctx = searchContext(query, mode)
-  const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode, anilistId: query.anilistId, episodeCandidates: query.episodeCandidates })
+  const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode, anilistId: query.anilistId, episodeCandidates: query.episodeCandidates, subtitle: !!opts.movie })
   const shaped = await collectFeed(
     queries,
     rssSearchWithRetry,
