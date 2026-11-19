@@ -4,6 +4,20 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.27] - 2026-11-19 (stable)
+
+Per-source bumps: `nyaa 1.0.39`, `yameii 1.0.36`, `toonshub 1.0.33`. Others unchanged.
+
+### Fixed
+
+- **OVAs and specials whose subtitle follows a colon were still not found.** The subtitle search added in the previous release only recognised a dash. One Punch Man: Road to Hero and KonoSuba 2: Kono Subarashii Geijutsu ni Shukufuku wo! put the subtitle after a colon and returned nothing. A colon now counts too, and the subtitle search has its own request so it no longer competes with the two title searches. One Punch Man: Road to Hero went from 0 to 4 rows.
+
+- **Specials from a later season were rejected, or the wrong season leaked in.** KonoSuba 2's OVA files are labelled S00, which the season check rejected for a season 2 show. A special now skips the season check when it names no season or names S00, and still has to match when it names a season. KonoSuba 2 went from 0 to 4 rows and no longer shows the season 3 OVAs.
+
+### Verified
+
+- Ten popular one-episode OVAs and specials were checked live: eight returned results with nothing off-show, and the two that returned none now do. Offline 297-show suite unchanged at 0.215% cross-franchise noise with 0 self-match failures.
+
 ## [1.6.26] - 2026-11-19 (stable)
 
 Per-source bumps: `nyaa 1.0.38`, `yameii 1.0.35`, `toonshub 1.0.32`. Others unchanged.

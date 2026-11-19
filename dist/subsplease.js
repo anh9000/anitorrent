@@ -254,9 +254,9 @@ function buildQueries(titles, opts = {}) {
     bases.push(q);
     if (bases.length >= limit) break;
   }
-  if (opts.subtitle && bases.length < limit) {
+  if (opts.subtitle) {
     for (const title of rankTitlesForQuery(titles || [])) {
-      const parts = String(title).split(/\s+-\s+/);
+      const parts = String(title).split(/\s+-\s+|:\s+/);
       if (parts.length < 2) continue;
       const sub = significantTokens(parts[parts.length - 1]).slice(0, 2);
       const base = trimTitleForQuery(title);
@@ -708,7 +708,9 @@ function classifyResult(title, opts) {
       if (marker && parseInt(marker[1], 10) >= 1) return null;
       if (titleEpisodeMarkers(title).some(([lo, hi]) => hi > lo || lo > 1)) return null;
     }
-    return seasonOk && yearOk ? "A" : "C";
+    const stated = detectResultSeason(title);
+    const seasonFree = special && (stated == null || stated === 0);
+    return (seasonFree || seasonOk) && yearOk ? "A" : "C";
   }
   const epOk = opts.episode == null || matchesAnyEpisode(title, opts);
   if (seasonOk && yearOk && epOk) {
