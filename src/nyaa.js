@@ -94,7 +94,7 @@ async function runSearch (query, opts) {
 
   const mode = opts.batch ? 'batch' : (opts.movie ? 'movie' : 'single')
   const ctx = searchContext(query, mode)
-  const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode, anilistId: query.anilistId, episodeCandidates: query.episodeCandidates, subtitle: !!opts.movie })
+  const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode, anilistId: query.anilistId, episodeCandidates: query.episodeCandidates, subtitle: !!opts.movie, dubs: !!opts.movie || (opts.episodeCount > 0 && opts.episodeCount <= 4) })
   const shaped = await collectFeed(
     queries,
     rssSearchWithRetry,
@@ -112,7 +112,7 @@ export default new class Nyaa {
     // or "S01E01", so applying titleHasEpisode() would filter out every real
     // release. Treat single() on a 1-episode entry as movie mode.
     if (query.episodeCount === 1) return runSearch(await withShowFacts(query), { movie: true })
-    return runSearch(await withEpisodeCandidates(query), { episode: query.episode })
+    return runSearch(await withEpisodeCandidates(query), { episode: query.episode, episodeCount: query.episodeCount })
   }
 
   async batch (query) {

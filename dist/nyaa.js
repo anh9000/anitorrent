@@ -311,6 +311,16 @@ function buildQueries(titles, opts = {}) {
       break;
     }
   }
+  if (opts.dubs) {
+    const lead = rankTitlesForQuery(titles || [])[0];
+    const base = lead ? trimTitleForQuery(lead) : "";
+    for (const tag of ["dub", "dual audio"]) {
+      const q = base + " " + tag;
+      if (!base || seen.has(q)) continue;
+      seen.add(q);
+      bases.push(q);
+    }
+  }
   const rescue = [];
   for (const alias of aliasTitles(opts.anilistId)) {
     const a = String(alias).trim();
@@ -621,10 +631,28 @@ function qualityRank(r) {
   if (r._trusted) return 0;
   return 1;
 }
+var DUB_AUDIO = /\b(?:dubbed|dub|dual[ ._-]?audio|multi[ ._-]?audio)\b/i;
+function isDubRelease(title) {
+  return DUB_AUDIO.test(String(title || ""));
+}
+function surfaceDubs(sorted) {
+  const lead = 2;
+  const room = 4;
+  if (sorted.length <= lead + 1) return sorted;
+  const head = sorted.slice(0, lead);
+  const rest = sorted.slice(lead);
+  const found = rest.filter((r) => r._tier === "A" && isDubRelease(r.title));
+  const plain = found.filter((r) => /\b(?:eng(?:lish)?[ ._-]?dub(?:bed)?|dubbed)\b/i.test(r.title));
+  const dual = found.filter((r) => !plain.includes(r));
+  const dubs = plain.slice(0, 2).concat(dual.slice(0, room - Math.min(plain.length, 2)));
+  if (!dubs.length) return sorted;
+  const picked = new Set(dubs);
+  return head.concat(dubs, rest.filter((r) => !picked.has(r)));
+}
 function sortResults(results, resolution) {
   const hasExact = results.some((r) => r._tier === "A");
   const sorted = results.slice();
-  return sorted.sort((a, b) => {
+  const ordered = sorted.sort((a, b) => {
     if (hasExact && a._tier !== b._tier) return a._tier < b._tier ? -1 : 1;
     if (resolution) {
       const am = matchesResolution(a.title, resolution) ? 1 : 0;
@@ -641,6 +669,7 @@ function sortResults(results, resolution) {
     if (sd !== 0) return sd;
     return timeOf(b) - timeOf(a);
   });
+  return hasExact ? surfaceDubs(ordered) : ordered;
 }
 function titleEpisodeMarkers(title) {
   const out = [];
@@ -1008,7 +1037,7 @@ async function runSearch(query, opts) {
   if (!query.titles || !query.titles.length) return [];
   const mode = opts.batch ? "batch" : opts.movie ? "movie" : "single";
   const ctx = searchContext(query, mode);
-  const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode, anilistId: query.anilistId, episodeCandidates: query.episodeCandidates, subtitle: !!opts.movie });
+  const queries = buildQueries(query.titles, { limit: 2, episode: opts.episode, anilistId: query.anilistId, episodeCandidates: query.episodeCandidates, subtitle: !!opts.movie, dubs: !!opts.movie || opts.episodeCount > 0 && opts.episodeCount <= 4 });
   const shaped = await collectFeed(
     queries,
     rssSearchWithRetry,
@@ -1021,7 +1050,7 @@ async function runSearch(query, opts) {
 var nyaa_default = new class Nyaa {
   async single(query) {
     if (query.episodeCount === 1) return runSearch(await withShowFacts(query), { movie: true });
-    return runSearch(await withEpisodeCandidates(query), { episode: query.episode });
+    return runSearch(await withEpisodeCandidates(query), { episode: query.episode, episodeCount: query.episodeCount });
   }
   async batch(query) {
     const results = await runSearch(query, { batch: true });

@@ -4,6 +4,17 @@ All notable changes to this repo are tracked here. Format based on [Keep a Chang
 
 Per-source versions live in `hayase/index.json` and `shiru/index.json`. Repo-level tags wrap shipping batches.
 
+## [1.6.28] - 2026-11-20 (stable)
+
+Per-source bumps: `nyaa 1.0.40`. Others unchanged.
+
+### Fixed
+
+- **English dub and dual audio releases of OVAs and specials were buried or missing.** Nyaa now runs two extra searches for short works (one to four episodes): the title plus "dub" and the title plus "dual audio". The Eris the Goblin Slayer English dub, for example, now sits in the top results instead of ninth.
+
+- **Dub and dual audio releases are surfaced in the list.** After the two best matches, up to four dub or dual audio releases of the same title are placed next, English dubs first. Subbed releases are not removed, only moved down.
+
+
 ## [1.6.27] - 2026-11-19 (stable)
 
 Per-source bumps: `nyaa 1.0.39`, `yameii 1.0.36`, `toonshub 1.0.33`. Others unchanged.
